@@ -1,3 +1,46 @@
+## Version 1.8.0 (2026/05/18)
+
+### Issues Closed
+
+* [Issue 155](https://github.com/pytroll/pygac/issues/155) - Relicense to Apache Version 2 ([PR 157](https://github.com/pytroll/pygac/pull/157) by [@sfinkens](https://github.com/sfinkens))
+* [Issue 146](https://github.com/pytroll/pygac/issues/146) - pygac/pod_reader.py: Invalid truncated buffers due to index overflow. ([PR 147](https://github.com/pytroll/pygac/pull/147) by [@asantam](https://github.com/asantam))
+* [Issue 139](https://github.com/pytroll/pygac/issues/139) - Calculation of pixel lat/lon does not work for GAC files ([PR 142](https://github.com/pytroll/pygac/pull/142) by [@oembury](https://github.com/oembury))
+* [Issue 136](https://github.com/pytroll/pygac/issues/136) - gac_pod reader is parsing padding bytes as scanlines
+* [Issue 135](https://github.com/pytroll/pygac/issues/135) - Access AVHRR data of NOAA satellites
+* [Issue 130](https://github.com/pytroll/pygac/issues/130) - Cannot read LAC files from NOAA CLASS ([PR 131](https://github.com/pytroll/pygac/pull/131) by [@mraspaud](https://github.com/mraspaud))
+
+In this release 6 issues were closed.
+
+### Pull Requests Merged
+
+#### Bugs fixed
+
+* [PR 149](https://github.com/pytroll/pygac/pull/149) - Activate google-style docs in sphinx
+* [PR 148](https://github.com/pytroll/pygac/pull/148) - Fix python requirement in rtd
+* [PR 133](https://github.com/pytroll/pygac/pull/133) - Fix bogus dtype refactoring
+* [PR 131](https://github.com/pytroll/pygac/pull/131) - Enable decoding of tbm dataset name ([130](https://github.com/pytroll/pygac/issues/130))
+
+#### Features added
+
+* [PR 157](https://github.com/pytroll/pygac/pull/157) - Relicense to Apache-2.0 ([155](https://github.com/pytroll/pygac/issues/155))
+* [PR 153](https://github.com/pytroll/pygac/pull/153) - Update read_tle_file in reader.py to not cause an infinite loop and to mask lat/lon after georeferencing
+* [PR 152](https://github.com/pytroll/pygac/pull/152) - Add median gcp distance to metadata
+* [PR 151](https://github.com/pytroll/pygac/pull/151) - Add first guess for time offset
+* [PR 150](https://github.com/pytroll/pygac/pull/150) - Added handling for optional DEM and orthocorrection
+* [PR 147](https://github.com/pytroll/pygac/pull/147) - fix: prevent overflow on POD buffer truncation ([146](https://github.com/pytroll/pygac/issues/146))
+* [PR 142](https://github.com/pytroll/pygac/pull/142) - Use new avhrr*_from_times definitions to calculate tie-point locations ([139](https://github.com/pytroll/pygac/issues/139))
+* [PR 141](https://github.com/pytroll/pygac/pull/141) - Add georeferencer for calibrated dataset
+* [PR 137](https://github.com/pytroll/pygac/pull/137) - Fix links to user guides
+* [PR 132](https://github.com/pytroll/pygac/pull/132) - Add numpy 2 compatibility ruff checks
+* [PR 127](https://github.com/pytroll/pygac/pull/127) - Extract calibration modules from the reader
+
+#### Documentation changes
+
+* [PR 149](https://github.com/pytroll/pygac/pull/149) - Activate google-style docs in sphinx
+
+In this release 16 pull requests were closed.
+
+
 ## Version 1.7.4 (2024/07/17)
 
 ### Issues Closed
