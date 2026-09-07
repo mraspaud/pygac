@@ -39,7 +39,7 @@ from pygac.lac_pod import scanline as lacpod_scanline
 from pygac.lac_reader import LACReader
 from pygac.pod_reader import POD_QualityIndicator, header3
 from pygac.pod_reader import tbm_header as tbm_header_dtype
-from pygac.reader import NoTLEData, yaw_steers
+from pygac.reader import NoTLEData, clock_needs_fitting, yaw_steers
 
 
 class FakePath(os.PathLike):
@@ -1625,6 +1625,17 @@ def test_metop_holds_its_swath_square_to_the_ground_track():
     assert yaw_steers("metopa")
 
 
+def test_the_pod_platforms_need_their_clock_fitted():
+    """POD clocks drift by seconds; one pass in the sample sits 27 s along its own track."""
+    assert clock_needs_fitting("noaa14")
+
+
+def test_the_disciplined_clocks_are_taken_at_their_word():
+    """KLM and Metop hold their time to within a scanline across the whole sample."""
+    assert not clock_needs_fitting("noaa19")
+    assert not clock_needs_fitting("metopb")
+
+
 def test_the_poes_platforms_fly_without_turning():
     """NOAA POES holds a fixed attitude, so its scan follows the inertial track."""
     assert not yaw_steers("noaa19")
@@ -1643,6 +1654,32 @@ def test_a_steered_platform_is_navigated_differently(pod_file_with_tbm_header, p
     turned, _ = lonlats_flying_as("metopa")
 
     assert np.abs(turned - straight).max() > 0.1
+
+
+def test_a_disciplined_platform_does_not_have_its_time_fitted(pod_file_with_tbm_header, pod_tle,
+                                                             monkeypatch):
+    """The platform decides whether time is fitted, and nothing downstream would notice."""
+    def skip_thermal(channels, *args, **kwargs):
+        return channels
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    asked = {}
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        asked.update(rest)
+        record_a_coherent_field(calibrated_ds)
+        return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
+    from georeferencer import georeferencer
+    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    reader.spacecraft_name = "noaa19"
+    reader.get_calibrated_dataset()
+
+    assert asked["solve_for_time"] is False
 
 
 def test_the_geolocation_names_its_nadir_convention(pod_file_with_tbm_header, pod_tle):

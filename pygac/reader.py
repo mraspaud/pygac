@@ -120,6 +120,25 @@ def yaw_steers(spacecraft_name):
     return spacecraft_name.startswith("metop")
 
 
+#: The first NOAA platform of the KLM series, whose clock is updated daily. Everything
+#: numbered below it belongs to the POD series, whose clock drifts between resets.
+FIRST_DISCIPLINED_NOAA = 15
+
+
+def clock_needs_fitting(spacecraft_name):
+    """Say whether *spacecraft_name* drifts enough in time to be worth fitting.
+
+    Measured across the sample, the POD platforms reach 27 s along their own track
+    while the KLM series and Metop never exceed one scanline. Fitting a time offset
+    that is known to be zero only lets the pitch absorb its noise, since a shift
+    along the track can be written as either.
+    """
+    if spacecraft_name.startswith("metop"):
+        return False
+    numbered = spacecraft_name.removeprefix("noaa")
+    return not (numbered.isdigit() and int(numbered) >= FIRST_DISCIPLINED_NOAA)
+
+
 def _reject_a_fit_resting_on(bound, fitted, what):
     """Refuse a fit whose *fitted* value has run to *bound*.
 
@@ -872,6 +891,7 @@ class Reader(ABC):
             calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem,
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
+            solve_for_time=clock_needs_fitting(self.spacecraft_name),
         )
 
         # Record how the fit was judged before deciding, so a rejected pass is
