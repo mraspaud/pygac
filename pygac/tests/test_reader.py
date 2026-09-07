@@ -1656,6 +1656,11 @@ def test_a_steered_platform_is_navigated_differently(pod_file_with_tbm_header, p
     assert np.abs(turned - straight).max() > 0.1
 
 
+def test_the_pod_platforms_with_a_trusted_clock_table_are_not_fitted_either():
+    """Where pygac corrects the clock from measurement, what is left is a scanline or less."""
+    assert not clock_needs_fitting("noaa9")
+
+
 def test_a_disciplined_platform_does_not_have_its_time_fitted(pod_file_with_tbm_header, pod_tle,
                                                              monkeypatch):
     """The platform decides whether time is fitted, and nothing downstream would notice."""

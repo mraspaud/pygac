@@ -124,16 +124,23 @@ def yaw_steers(spacecraft_name):
 #: numbered below it belongs to the POD series, whose clock drifts between resets.
 FIRST_DISCIPLINED_NOAA = 15
 
+#: POD platforms whose drift pygac takes out from a table of measured clock errors that
+#: is trusted. On these the correction leaves a scanline or less: it turns +1.35 s into
+#: -0.09 s on noaa9, and what remains matches the KLM and Metop noise floor. NOAA-14 has
+#: a table too, but it was derived by matching coastlines and is not trusted; the one
+#: pass we can check it against is 27 s out after correcting.
+POD_WITH_A_TRUSTED_CLOCK = frozenset({"noaa7", "noaa9", "noaa11", "noaa12"})
+
 
 def clock_needs_fitting(spacecraft_name):
     """Say whether *spacecraft_name* drifts enough in time to be worth fitting.
 
-    Measured across the sample, the POD platforms reach 27 s along their own track
-    while the KLM series and Metop never exceed one scanline. Fitting a time offset
-    that is known to be zero only lets the pitch absorb its noise, since a shift
-    along the track can be written as either.
+    Fitting a time offset already known to be zero only lets the pitch absorb its
+    noise, since a shift along the track can be written as either. Platforms are
+    spared the fit where their clock is disciplined in flight, or where it is
+    corrected afterwards from a table worth believing.
     """
-    if spacecraft_name.startswith("metop"):
+    if spacecraft_name.startswith("metop") or spacecraft_name in POD_WITH_A_TRUSTED_CLOCK:
         return False
     numbered = spacecraft_name.removeprefix("noaa")
     return not (numbered.isdigit() and int(numbered) >= FIRST_DISCIPLINED_NOAA)
