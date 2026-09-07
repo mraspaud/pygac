@@ -864,39 +864,56 @@ class Reader(ABC):
                 f"the pass carries too few measurements to be worth navigating"
             )
 
-    def _refuse_a_pass_without_a_coherent_image(self, counts):
+    @staticmethod
+    def _neighbour_agreement(frame):
+        """Return how far each pixel tracks the one beside it, or None if unjudgeable.
+
+        Coherence belongs to the frame rather than to any one scanline, so a sample
+        spread evenly through the pass measures it as well as all of it would, and
+        spans the ends as readily as the middle.
+        """
+        sampled = frame[::max(1, frame.shape[0] // LINES_TO_JUDGE)].astype(float)
+        here, beside = sampled[:, :-1].ravel(), sampled[:, 1:].ravel()
+        together = np.isfinite(here) & np.isfinite(beside)
+        if together.sum() < ENOUGH_PIXELS_TO_JUDGE:
+            return None
+        if len(np.unique(sampled[np.isfinite(sampled)])) < ENOUGH_LEVELS_TO_JUDGE:
+            return None         # too few distinct levels to be a scene, or to judge as one
+        agreement = float(np.corrcoef(here[together], beside[together])[0, 1])
+        return agreement if np.isfinite(agreement) else None
+
+    def _refuse_a_pass_without_a_coherent_image(self, channels):
         """Refuse a pass whose pixels bear no relation to the ones beside them.
 
         Neighbouring samples along a scan see nearly the same ground, so in any real
         scene their values track each other closely. Where they do not, the frame
         carries noise rather than an image, and no amount of it will match a reference.
         Brightness cannot make this distinction, a snowfield being allowed to be bright.
+
+        One sound channel is enough: matching falls back to the thermal channel by night
+        already, and nothing stops it doing so by day, so a pass is only refused when no
+        channel holds an image at all.
         """
-        # Coherence belongs to the frame rather than to any one scanline, so a sample
-        # spread evenly through the pass measures it as well as all of it would, and
-        # spans the ends as readily as the middle.
-        sampled = counts[::max(1, counts.shape[0] // LINES_TO_JUDGE)].astype(float)
-        here, beside = sampled[:, :-1].ravel(), sampled[:, 1:].ravel()
-        together = np.isfinite(here) & np.isfinite(beside)
-        if together.sum() < ENOUGH_PIXELS_TO_JUDGE:
-            return
-        if len(np.unique(sampled[np.isfinite(sampled)])) < ENOUGH_LEVELS_TO_JUDGE:
-            return          # too few distinct levels to be a scene, or to judge as one
-        agreement = float(np.corrcoef(here[together], beside[together])[0, 1])
-        if not np.isfinite(agreement):
-            return          # a frame with no variation at all: flat, but not noise
-        if agreement < LEAST_NEIGHBOUR_AGREEMENT:
+        best = None
+        for name in np.atleast_1d(channels.coords["channel_name"].values):
+            agreement = self._neighbour_agreement(np.asarray(channels.sel(channel_name=name)))
+            if agreement is None:
+                continue
+            if agreement >= LEAST_NEIGHBOUR_AGREEMENT:
+                return
+            best = agreement if best is None else max(best, agreement)
+        if best is not None:
             raise ReaderError(
-                f"neighbouring pixels agree only {agreement:.2f}, so the pass carries "
-                f"no coherent image; every pass that registers agrees above 0.89"
+                f"no channel carries a coherent image; the best agreement between "
+                f"neighbouring pixels is {best:.2f}, where every pass that registers "
+                f"agrees above 0.89"
             )
 
     def get_calibrated_dataset(self):
         """Create and calibrate the dataset for the pass."""
         self._refuse_a_pass_that_could_not_be_calibrated()
         ds = self.create_counts_dataset()
-        self._refuse_a_pass_without_a_coherent_image(
-            np.asarray(ds["channels"].sel(channel_name="2")))
+        self._refuse_a_pass_without_a_coherent_image(ds["channels"])
         #
         # Make sure earth counts are kept for uncertainty calculation
         #

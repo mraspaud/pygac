@@ -1487,6 +1487,48 @@ def test_a_pass_that_could_not_be_calibrated_is_refused(pod_file_with_tbm_header
         reader.get_calibrated_dataset()
 
 
+def packed_into_words(counts):
+    """Pack a (line, pixel, channel) array of counts the way the instrument does.
+
+    Three ten-bit samples travel in each thirty-two bit word, taken in order across the
+    channels of one pixel and on to the next, so a test that wants one channel to differ
+    from another has to lay them out this way.
+    """
+    flat = counts.reshape(counts.shape[0], -1).astype(np.uint32)
+    words = np.zeros((counts.shape[0], -(-flat.shape[1] // 3)), dtype=">u4")
+    for offset, shift in ((0, 20), (1, 10), (2, 0)):
+        taken = flat[:, offset::3]
+        words[:, :taken.shape[1]] |= taken << shift
+    return words
+
+
+def test_a_pass_is_kept_when_any_one_channel_still_carries_an_image(pod_file_with_tbm_header,
+                                                                    pod_tle, monkeypatch):
+    """A dead visible channel does not condemn a pass whose thermal channel is sound.
+
+    Matching falls back to channel 4 by night already, and there is nothing stopping it
+    doing so by day, so a pass should only be refused when no channel holds an image.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True)
+    reader.read(pod_file_with_tbm_header)
+    lines, width = len(reader.scans), reader.scan_width
+    counts = np.zeros((lines, width, 5), dtype=np.uint32)
+    rng = np.random.default_rng(0)
+    ramp = np.linspace(100, 900, width).astype(np.uint32)
+    for channel in range(5):
+        counts[:, :, channel] = rng.integers(0, 1024, size=(lines, width))
+    counts[:, :, 3] = ramp                      # channel 4 holds a clean scene
+    reader.scans["sensor_data"] = packed_into_words(counts)
+
+    reader.get_calibrated_dataset()              # must not raise
+
+
 def test_a_pass_carrying_no_image_is_refused(pod_file_with_tbm_header, pod_tle):
     """Noise is not a scene, however bright it is.
 
