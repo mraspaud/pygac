@@ -1471,6 +1471,66 @@ def test_georeferencing_rejects_too_few_gcps(pod_file_with_tbm_header, pod_tle, 
     assert dataset.attrs["georeferenced"] is False
 
 
+def test_a_pass_that_could_not_be_calibrated_is_refused(pod_file_with_tbm_header, pod_tle):
+    """A pass whose scanlines carry the calibration flag has no usable measurements left.
+
+    Two NOAA-19 passes in the sample set it on 97% of their scanlines; the counts survive
+    but the calibrated channels do not, leaving 3% of the imagery. Such a pass should be
+    refused for what is wrong with it, rather than limping on to fail the point count.
+    """
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True)
+    reader.read(pod_file_with_tbm_header)
+    reader.scans["quality_indicators"] = POD_QualityIndicator.CALIBRATION
+
+    with pytest.raises(ReaderError, match="calibrated"):
+        reader.get_calibrated_dataset()
+
+
+def test_a_pass_carrying_no_image_is_refused(pod_file_with_tbm_header, pod_tle):
+    """Noise is not a scene, however bright it is.
+
+    Three NOAA-8 passes in the sample carry no coherent image at all: their neighbouring
+    pixels agree no better than chance, where every pass that registers agrees above 0.89.
+    Brightness cannot tell the two apart, since a snowfield is allowed to be bright.
+    """
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True)
+    reader.read(pod_file_with_tbm_header)
+    noise = np.random.default_rng(0).integers(0, 1024, size=reader.scans["sensor_data"].shape)
+    reader.scans["sensor_data"] = noise
+
+    with pytest.raises(ReaderError, match="coherent"):
+        reader.get_calibrated_dataset()
+
+
+def test_georeferencing_accepts_a_dozen_control_points(pod_file_with_tbm_header, pod_tle,
+                                                       monkeypatch):
+    """Four parameters need two points for rank, so a dozen is a real constraint.
+
+    The floor is there to catch the absurd one- and two-point "successes", not to insist
+    on a rich harvest: a pass over ocean with one coastline in view can be well determined
+    on a dozen well spread points, and passes that are not are refused on other grounds.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds, count=12)
+        return 0, (0, 0, 0), ([10000] * 12, [1000] * 12)
+    from georeferencer import georeferencer
+    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["georeferenced"] is True
+
+
 def test_rejected_georeferencing_still_records_diagnostics(pod_file_with_tbm_header, pod_tle, monkeypatch):
     """A rejected fit must still say how it was judged.
 

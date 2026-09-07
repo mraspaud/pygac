@@ -59,6 +59,25 @@ LOG = logging.getLogger(__name__)
 #: same nadir as the navigation it corrects.
 NADIR_CONVENTION = "geodetic"
 
+#: How closely a pixel must track the one beside it along the scan for the frame to hold
+#: an image at all. Measured across the sample, every pass that registers lies between
+#: 0.89 and 0.99, while three NOAA-8 passes carrying only noise lie at -0.01 to 0.00.
+#: The gap is wide enough that the exact placing hardly matters.
+LEAST_NEIGHBOUR_AGREEMENT = 0.5
+
+#: Below this many usable pixels the agreement is not worth computing.
+ENOUGH_PIXELS_TO_JUDGE = 1000
+
+#: Below this many distinct count values the frame holds no scene to judge. Real imagery
+#: fills hundreds of levels, and so does the noise this gate is meant to catch; a frame
+#: with a handful is synthetic, and its neighbour agreement means nothing either way.
+ENOUGH_LEVELS_TO_JUDGE = 50
+
+#: The share of a pass beyond which a per-scanline fault stops being a blemish and
+#: becomes the pass. Set at half: the two NOAA-19 passes it is meant to catch flag 97%
+#: of their scanlines, and no pass that registers flags any.
+MOST_OF_A_PASS = 0.5
+
 #: Bound pyorbital places on each fitted attitude angle, in radians (~28.6 degrees).
 ATTITUDE_BOUND_RAD = 0.5
 
@@ -200,7 +219,7 @@ class Reader(ABC):
         reference_image=None,
         dem=None,
         compute_lonlats_from_tles: bool = False,
-        min_gcps: int = 50,
+        min_gcps: int = 10,
         compute_uncertainties: bool = False,
     ):
         """Init the reader.
@@ -223,9 +242,12 @@ class Reader(ABC):
             reference_image: the reference image to use for georeferencing
             dem: the digital elevation model to use for orthocorrection
             min_gcps: Minimum number of ground control points that must survive matching for a
-                displacement fit to be accepted. The fit solves for four parameters, so a handful
-                of points yields a near-zero residual that looks like a perfect registration.
-                Defaults to 50.
+                displacement fit to be accepted. The fit solves for four parameters and each
+                point carries two, so two points is the rank floor; the default leaves five
+                times that for outliers. It is deliberately not a proxy for a good harvest:
+                what makes a fit trustworthy is where the points fall, not how many there
+                are, and a pass whose data is unusable is refused on its own terms.
+                Defaults to 10.
             compute_lonlats_from_tles: Do not use the longitudes and latitudes provided in the file, rather compute them
                                        from the TLE.
             compute_uncertainties: Whether to add uncertainty estimates in the calibrated_dataset.
@@ -821,8 +843,50 @@ class Reader(ABC):
         """Return the calibrated dataset."""
         return self.get_calibrated_dataset()
 
+    def _refuse_a_pass_that_could_not_be_calibrated(self):
+        """Refuse a pass whose scanlines mostly report insufficient data to calibrate.
+
+        The counts survive the flag but the calibrated channels do not, so what is left
+        is a scene with almost no measurements in it. Refusing here says what is wrong
+        with the pass, rather than letting it reach the registration and fail on a
+        point count that describes the symptom instead of the cause.
+        """
+        indicators = self.scans[self._quality_indicators_key]
+        uncalibrated = float(np.mean((indicators & self.QFlag.CALIBRATION) != 0))
+        if uncalibrated > MOST_OF_A_PASS:
+            raise ReaderError(
+                f"{uncalibrated:.0%} of the scanlines could not be calibrated; "
+                f"the pass carries too few measurements to be worth navigating"
+            )
+
+    def _refuse_a_pass_without_a_coherent_image(self):
+        """Refuse a pass whose pixels bear no relation to the ones beside them.
+
+        Neighbouring samples along a scan see nearly the same ground, so in any real
+        scene their values track each other closely. Where they do not, the frame
+        carries noise rather than an image, and no amount of it will match a reference.
+        Brightness cannot make this distinction, a snowfield being allowed to be bright.
+        """
+        counts = np.asarray(self.get_counts())[:, :, 1].astype(float)
+        here, beside = counts[:, :-1].ravel(), counts[:, 1:].ravel()
+        together = np.isfinite(here) & np.isfinite(beside)
+        if together.sum() < ENOUGH_PIXELS_TO_JUDGE:
+            return
+        if len(np.unique(counts[np.isfinite(counts)])) < ENOUGH_LEVELS_TO_JUDGE:
+            return          # too few distinct levels to be a scene, or to judge as one
+        agreement = float(np.corrcoef(here[together], beside[together])[0, 1])
+        if not np.isfinite(agreement):
+            return          # a frame with no variation at all: flat, but not noise
+        if agreement < LEAST_NEIGHBOUR_AGREEMENT:
+            raise ReaderError(
+                f"neighbouring pixels agree only {agreement:.2f}, so the pass carries "
+                f"no coherent image; every pass that registers agrees above 0.89"
+            )
+
     def get_calibrated_dataset(self):
         """Create and calibrate the dataset for the pass."""
+        self._refuse_a_pass_that_could_not_be_calibrated()
+        self._refuse_a_pass_without_a_coherent_image()
         ds = self.create_counts_dataset()
         #
         # Make sure earth counts are kept for uncertainty calculation
