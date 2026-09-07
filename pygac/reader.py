@@ -33,7 +33,7 @@ import types
 import warnings
 from abc import ABC, abstractmethod
 from contextlib import suppress
-from functools import cache, cached_property
+from functools import cached_property
 from importlib.metadata import entry_points
 
 import geotiepoints as gtp
@@ -607,23 +607,27 @@ class Reader(ABC):
         """
         raise NotImplementedError
 
-    @cache
     def get_times(self):
         """Read scanline timestamps and try to correct invalid values.
+
+        The timestamps are read once and kept on the reader, which is where the rest of
+        the class already looks for them. Holding them anywhere else would keep the
+        reader, and the whole pass it carries, alive after the pass is finished.
 
         Returns:
             UTC timestamps
 
         """
-        # Read timestamp
-        year, jday, msec = self._get_times_from_file()
-        # Correct invalid values
-        year, jday, msec = self.correct_times_median(year=year, jday=jday, msec=msec)
-        self._times_as_np_datetime64 = self.to_datetime64(year=year, jday=jday, msec=msec)
-        try:
-            self._times_as_np_datetime64 = self.correct_times_thresh()
-        except TimestampMismatch as err:
-            LOG.error(str(err))
+        if self._times_as_np_datetime64 is None:
+            # Read timestamp
+            year, jday, msec = self._get_times_from_file()
+            # Correct invalid values
+            year, jday, msec = self.correct_times_median(year=year, jday=jday, msec=msec)
+            self._times_as_np_datetime64 = self.to_datetime64(year=year, jday=jday, msec=msec)
+            try:
+                self._times_as_np_datetime64 = self.correct_times_thresh()
+            except TimestampMismatch as err:
+                LOG.error(str(err))
         return self._times_as_np_datetime64
 
 

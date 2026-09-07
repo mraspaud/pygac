@@ -1471,6 +1471,46 @@ def test_georeferencing_rejects_too_few_gcps(pod_file_with_tbm_header, pod_tle, 
     assert dataset.attrs["georeferenced"] is False
 
 
+def test_a_reader_is_released_once_its_pass_is_done(pod_file_with_tbm_header, pod_tle):
+    """Nothing may outlive the pass it belongs to.
+
+    A cache on a bound method keys on the instance, so it keeps every reader that has
+    ever run -- and the whole scanline array each one owns -- for the life of the
+    process. Over a campaign that is measured in hundreds of thousands of passes, a
+    worker that never lets go is a worker that eventually dies.
+    """
+    import gc
+    import weakref
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True)
+    reader.read(pod_file_with_tbm_header)
+    reader.get_times()
+    still_there = weakref.ref(reader)
+
+    del reader
+    gc.collect()
+
+    assert still_there() is None
+
+
+def test_a_reader_that_read_its_telemetry_is_released_too(pod_file_with_tbm_header, pod_tle):
+    """The timestamps are not the only thing a bound cache holds on to."""
+    import gc
+    import weakref
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True)
+    reader.read(pod_file_with_tbm_header)
+    reader.get_telemetry()
+    still_there = weakref.ref(reader)
+
+    del reader
+    gc.collect()
+
+    assert still_there() is None
+
+
 def test_a_pass_that_could_not_be_calibrated_is_refused(pod_file_with_tbm_header, pod_tle):
     """A pass whose scanlines carry the calibration flag has no usable measurements left.
 

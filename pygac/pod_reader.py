@@ -40,7 +40,7 @@ import datetime
 import logging
 import warnings
 from enum import IntFlag
-from functools import cache
+from functools import cached_property
 
 import numpy as np
 
@@ -569,15 +569,15 @@ class PODReader(Reader):
             total_space_counts: np.array
 
         """
-        full_prt, full_ict_counts, full_space_counts = self._decode_telemetry()
+        full_prt, full_ict_counts, full_space_counts = self._decoded_telemetry
 
         mean_prt_counts = np.mean(full_prt, axis=1)
 
 
         return mean_prt_counts, full_space_counts, full_ict_counts
 
-    @cache
-    def _decode_telemetry(self):
+    @cached_property
+    def _decoded_telemetry(self):
         number_of_scans = self.scans["telemetry"].shape[0]
         decode_tele = np.zeros((int(number_of_scans), 105))
         decode_tele[:, ::3] = (self.scans["telemetry"] >> 20) & 1023
@@ -598,7 +598,7 @@ class PODReader(Reader):
             vis_space_counts: np.array
             total_vis_space_counts: np.array
         """
-        _, _, full_space_counts = self._decode_telemetry()
+        _, _, full_space_counts = self._decoded_telemetry
 
         total_vis_space_counts = full_space_counts[:, :, :2]
         vis_space_counts = total_vis_space_counts.mean(axis=1)
