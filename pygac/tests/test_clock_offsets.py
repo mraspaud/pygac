@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pygac.clock_offsets_converter import clock_table_covers, get_offsets, txt
+from pygac.clock_offsets_converter import MEASUREMENTS, clock_table_covers, get_offsets, txt
 
 
 def test_a_time_inside_the_measurements_is_covered():
@@ -39,3 +39,9 @@ def test_a_table_that_has_lost_a_measurement_is_refused(monkeypatch):
 def test_a_moment_before_a_table_begins_is_not_covered():
     """noaa9's measurements start in January 1986; before that nothing was recorded."""
     assert not clock_table_covers("noaa9", np.datetime64("1980-01-01T00:00:00"))
+
+
+def test_every_table_records_how_many_measurements_it_holds():
+    """A table nobody counted can lose a line without anything failing."""
+    uncounted = sorted(set(txt) - set(MEASUREMENTS))
+    assert not uncounted, f"no measurement count recorded for {uncounted}"

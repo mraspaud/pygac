@@ -260,7 +260,7 @@ def clock_table_covers(spacecraft_name, when):
 #: How many measurements a table is known to hold. These tables are edited by hand, and a
 #: dropped line changes navigation without anything failing, so a table listed here is
 #: counted on every read and refused if it has changed size.
-MEASUREMENTS = {"noaa9": 148}
+MEASUREMENTS = {"noaa7": 30, "noaa9": 148, "noaa11": 100, "noaa12": 104, "noaa14": 38}
 
 
 def get_offsets(sat):
