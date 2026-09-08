@@ -46,6 +46,7 @@ from pyorbital.geoloc import compute_pixels, get_lonlatalt
 from pyorbital.orbital import Orbital
 
 from pygac import gac_io
+from pygac.clock_offsets_converter import clock_table_covers
 from pygac.configuration import get_config
 from pygac.utils import calculate_sun_earth_distance_correction, centered_modulus, get_absolute_azimuth_angle_diff
 
@@ -192,9 +193,11 @@ def max_scan_angle_for(spacecraft_name):
 A_TRUSTED_CLOCK_HOLDS_WITHIN_S = 0.5
 
 
-def should_fit_the_clock(spacecraft_name, along_track_seconds):
+def should_fit_the_clock(spacecraft_name, along_track_seconds, when=None):
     """Say whether to fit a time offset for this pass."""
     if clock_needs_fitting(spacecraft_name):
+        return True
+    if when is not None and not clock_table_covers(spacecraft_name, when):
         return True
     if abs(along_track_seconds) > A_TRUSTED_CLOCK_HOLDS_WITHIN_S:
         warnings.warn(

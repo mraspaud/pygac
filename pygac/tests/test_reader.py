@@ -1882,6 +1882,12 @@ def test_a_pass_that_slid_backwards_is_fitted_too():
     assert should_fit_the_clock("noaa19", -1.0)
 
 
+def test_a_trusted_platform_past_its_clock_table_is_fitted():
+    """noaa14's table stops in August 2000 but it flew to 2007; beyond the table the
+    correction is only its last measurement held flat, so the time must be fitted."""
+    assert should_fit_the_clock("noaa14", 0.0, np.datetime64("2003-06-01T00:00:00"))
+
+
 def test_distrusting_a_platform_clock_says_so_loudly():
     """The platform policy has been overruled by one pass, which nothing else would reveal."""
     with pytest.warns(RuntimeWarning, match="clock"):
