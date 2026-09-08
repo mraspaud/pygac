@@ -155,6 +155,21 @@ FIRST_DISCIPLINED_NOAA = 15
 #: pass we can check it against is 27 s out after correcting.
 POD_WITH_A_TRUSTED_CLOCK = frozenset({"noaa7", "noaa9", "noaa11", "noaa12"})
 
+#: The scan steps 0.05409868099 degrees between samples, so the outermost of the 2048
+#: puts its centre at 0.05409868099 * 1023.5 degrees from nadir (KLM Guide, Appendix J).
+NOMINAL_MAX_SCAN_ANGLE = 55.37
+
+#: Platforms measured to scan a different angle from the nominal one, and the angle each
+#: was measured at. Nominally identical instruments do not scan identically: Metop-A, -B
+#: and -C were built together and sit 0.05 degrees apart. Empty until a set of measurements
+#: is adopted, so that every platform is navigated at the nominal angle until then.
+MAX_SCAN_ANGLES = {}
+
+
+def max_scan_angle_for(spacecraft_name):
+    """Give the half-swath angle *spacecraft_name* scans."""
+    return MAX_SCAN_ANGLES.get(spacecraft_name, NOMINAL_MAX_SCAN_ANGLE)
+
 
 def clock_needs_fitting(spacecraft_name):
     """Say whether *spacecraft_name* drifts enough in time to be worth fitting.
@@ -1808,7 +1823,8 @@ class Reader(ABC):
     def _compute_lonlat_from_tles(self, utcs):
         """Compute lon lat values using pyorbital."""
         tic = datetime.datetime.now()
-        sgeom = self.geoloc_definition(utcs.astype(datetime.datetime), self.lonlat_sample_points)
+        sgeom = self.geoloc_definition(utcs.astype(datetime.datetime), self.lonlat_sample_points,
+                                       scan_angle=max_scan_angle_for(self.spacecraft_name))
         t0 = utcs[0].astype(datetime.datetime)
         s_times = sgeom.times(t0)
         tle1, tle2 = self.get_tle_lines()

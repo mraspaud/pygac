@@ -39,7 +39,13 @@ from pygac.lac_pod import scanline as lacpod_scanline
 from pygac.lac_reader import LACReader
 from pygac.pod_reader import POD_QualityIndicator, header3
 from pygac.pod_reader import tbm_header as tbm_header_dtype
-from pygac.reader import NoTLEData, clock_needs_fitting, yaw_steers
+from pygac.reader import (
+    MAX_SCAN_ANGLES,
+    NoTLEData,
+    clock_needs_fitting,
+    max_scan_angle_for,
+    yaw_steers,
+)
 
 
 class FakePath(os.PathLike):
@@ -1797,6 +1803,33 @@ def test_a_large_residual_alone_does_not_reject_a_registration(pod_file_with_tbm
 def test_metop_holds_its_swath_square_to_the_ground_track():
     """Metop turns as it flies, so its scan stays perpendicular to the ground track."""
     assert yaw_steers("metopa")
+
+
+def test_an_unlisted_platform_scans_the_nominal_angle():
+    """Appendix J steps the scan 0.05409868099 deg, putting sample 2048 at 55.37."""
+    assert max_scan_angle_for("noaa14") == 55.37
+
+
+def test_a_platform_measured_to_scan_differently_gets_its_own_angle(monkeypatch):
+    """Metop-A, -B and -C were built together and scan 0.05 degrees apart."""
+    monkeypatch.setitem(MAX_SCAN_ANGLES, "metopa", 55.245)
+    assert max_scan_angle_for("metopa") == 55.245
+
+
+def test_a_platform_is_navigated_at_the_angle_it_scans(pod_file_with_tbm_header, pod_tle,
+                                                      monkeypatch):
+    """The swath the fit is given and the swath the navigation draws must be the same one."""
+    def lonlats_scanning(angle):
+        reader = LACPODReader(interpolate_coords=True, tle_dir=pod_tle.parent,
+                              tle_name=pod_tle.name, compute_lonlats_from_tles=True)
+        reader.read(pod_file_with_tbm_header)
+        monkeypatch.setitem(MAX_SCAN_ANGLES, reader.spacecraft_name, angle)
+        return reader.get_lonlat()[0]
+
+    nominal = lonlats_scanning(55.37)
+    narrower = lonlats_scanning(55.20)
+
+    assert np.abs(narrower - nominal).max() > 0.01
 
 
 def test_the_pod_platforms_need_their_clock_fitted():
