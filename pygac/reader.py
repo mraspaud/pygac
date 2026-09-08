@@ -197,7 +197,8 @@ def should_fit_the_clock(spacecraft_name, along_track_seconds, when=None):
     """Say whether to fit a time offset for this pass."""
     if clock_needs_fitting(spacecraft_name):
         return True
-    if when is not None and not clock_table_covers(spacecraft_name, when):
+    if (when is not None and spacecraft_name in POD_WITH_A_TRUSTED_CLOCK
+            and not clock_table_covers(spacecraft_name, when)):
         return True
     if abs(along_track_seconds) > A_TRUSTED_CLOCK_HOLDS_WITHIN_S:
         warnings.warn(

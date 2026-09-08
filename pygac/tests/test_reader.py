@@ -1888,6 +1888,11 @@ def test_a_trusted_platform_past_its_clock_table_is_fitted():
     assert should_fit_the_clock("noaa14", 0.0, np.datetime64("2003-06-01T00:00:00"))
 
 
+def test_a_platform_needing_no_clock_table_is_not_fitted_for_want_of_one():
+    """metopb steers its own clock and was never given a drift table to run out of."""
+    assert not should_fit_the_clock("metopb", 0.0, np.datetime64("2019-06-01T00:00:00"))
+
+
 def test_distrusting_a_platform_clock_says_so_loudly():
     """The platform policy has been overruled by one pass, which nothing else would reveal."""
     with pytest.warns(RuntimeWarning, match="clock"):
