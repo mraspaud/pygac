@@ -249,8 +249,8 @@ txt = {"noaa14":
 sat = None
 
 
-def clock_table_covers(spacecraft_name, when):
-    """Say whether a measured clock error is held for *spacecraft_name* at *when*."""
+def clock_measurements_reach(spacecraft_name, when):
+    """Say whether *spacecraft_name*'s measured clock errors reach as late as *when*."""
     if spacecraft_name not in txt:
         return False
     measured, _ = get_offsets(spacecraft_name)
