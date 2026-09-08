@@ -226,6 +226,7 @@ class Reader(ABC):
         compute_lonlats_from_tles: bool = False,
         min_gcps: int = 10,
         compute_uncertainties: bool = False,
+        corrupt_flags: str | None = None,
     ):
         """Init the reader.
 
@@ -253,6 +254,12 @@ class Reader(ABC):
                 what makes a fit trustworthy is where the points fall, not how many there
                 are, and a pass whose data is unusable is refused on its own terms.
                 Defaults to 10.
+            corrupt_flags: Which per-scanline quality flags mark a scanline as corrupt,
+                named and separated by "|", as in
+                "FATAL_FLAG|CALIBRATION|NO_EARTH_LOCATION|PSEUDO_NOISE". A campaign may
+                need to discard scanlines the library keeps by default. An unrecognised
+                name is refused rather than ignored, since a typo would otherwise turn
+                off half the mask without saying so. Defaults to the library's own set.
             compute_lonlats_from_tles: Do not use the longitudes and latitudes provided in the file, rather compute them
                                        from the TLE.
             compute_uncertainties: Whether to add uncertainty estimates in the calibrated_dataset.
@@ -282,6 +289,7 @@ class Reader(ABC):
         self.dem = dem
         self.compute_lonlats_from_tles: bool = compute_lonlats_from_tles
         self.min_gcps: int = min_gcps
+        self.corrupt_flags: str | None = corrupt_flags
         self.compute_uncertainties: bool = compute_uncertainties
 
         self.clock_drift_correction_applied = False
@@ -1176,11 +1184,28 @@ class Reader(ABC):
         """KLM/POD specific readout of lat/lon coordinates."""
         raise NotImplementedError
 
+    def _named_flags(self, named):
+        """Return the flags *named* stands for, refusing any name this platform lacks."""
+        wanted = None
+        for name in (one.strip() for one in named.split("|") if one.strip()):
+            try:
+                flag = self.QFlag[name]
+            except KeyError:
+                raise ReaderError(
+                    f"{name!r} is not a quality flag of {type(self.QFlag).__name__}; "
+                    f"known flags are {', '.join(one.name for one in self.QFlag)}"
+                ) from None
+            wanted = flag if wanted is None else wanted | flag
+        if wanted is None:
+            raise ReaderError(f"no quality flag named in {named!r}")
+        return wanted
+
     @property
     def mask(self):
         """Mask for corrupt scanlines."""
         if self._mask is None:
-            self._mask = self._get_corrupt_mask()
+            flags = self._named_flags(self.corrupt_flags) if self.corrupt_flags else None
+            self._mask = self._get_corrupt_mask(flags=flags)
         return self._mask
 
     @property

@@ -1511,6 +1511,38 @@ def test_a_reader_that_read_its_telemetry_is_released_too(pod_file_with_tbm_head
     assert still_there() is None
 
 
+def test_the_corrupt_mask_can_be_asked_to_cover_more(pod_file_with_tbm_header, pod_tle):
+    """A campaign may need to discard scanlines the library's default keeps.
+
+    Pseudo-noise lines look perfectly well behaved along the scan -- one NOAA-14 pass
+    agrees 0.999 between neighbouring pixels -- while being ruined down the track. The
+    file flags them, and the default mask does not read that flag, so the matcher is
+    handed every one of them.
+    """
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True,
+                          corrupt_flags="FATAL_FLAG|PSEUDO_NOISE")
+    reader.read(pod_file_with_tbm_header)
+    reader.scans["quality_indicators"] = POD_QualityIndicator.PSEUDO_NOISE
+
+    assert reader.mask.all()
+
+
+def test_a_misspelt_quality_flag_is_refused(pod_file_with_tbm_header, pod_tle):
+    """A name that is not a quality flag must stop the pass, not quietly do nothing.
+
+    The mask is named in configuration, so a typo would otherwise switch off part of it
+    for every pass of a campaign without anything saying so.
+    """
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True,
+                          corrupt_flags="FATAL_FLAG|PSEUDONOISE")
+    reader.read(pod_file_with_tbm_header)
+
+    with pytest.raises(ReaderError, match="PSEUDONOISE"):
+        reader.mask
+
+
 def test_a_pass_that_could_not_be_calibrated_is_refused(pod_file_with_tbm_header, pod_tle):
     """A pass whose scanlines carry the calibration flag has no usable measurements left.
 
