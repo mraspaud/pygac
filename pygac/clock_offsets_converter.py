@@ -257,16 +257,25 @@ def clock_measurements_reach(spacecraft_name, when):
     return when <= np.datetime64(max(measured))
 
 
+#: How many measurements a table is known to hold. These tables are edited by hand, and a
+#: dropped line changes navigation without anything failing, so a table listed here is
+#: counted on every read and refused if it has changed size.
+MEASUREMENTS = {"noaa9": 148}
+
+
 def get_offsets(sat):
-    """Get the clock drift offsets for sat.
+    """Get the clock drift offsets for sat, refusing a table that has changed size.
     """
     errors = []
-    offsets = txt[sat]
-    for line in offsets.split("\n"):
+    for line in txt[sat].strip().split("\n"):
         elts = line.split()
 
         errors.append((datetime.strptime("".join(elts[:2]), "%y%j%H%M%S"),
                        float(elts[2])))
         errors.append((datetime.strptime("".join(elts[3:5]), "%y%j%H%M%S"),
                        float(elts[5])))
+    recorded = MEASUREMENTS.get(sat)
+    if recorded is not None and len(errors) != recorded:
+        raise ValueError(f"{sat}'s table holds {len(errors)} measurements where "
+                         f"{recorded} are recorded")
     return zip(*errors)

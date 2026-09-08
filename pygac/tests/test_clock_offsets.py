@@ -1,6 +1,7 @@
 """Tests for the tables of measured spacecraft clock error."""
 
 import numpy as np
+import pytest
 
 from pygac.clock_offsets_converter import clock_measurements_reach, get_offsets, txt
 
@@ -26,3 +27,10 @@ def test_every_table_runs_forwards_in_time():
         measured, _ = get_offsets(spacecraft_name)
         backwards = [(a, b) for a, b in zip(measured, measured[1:]) if b < a]
         assert not backwards, f"{spacecraft_name} steps backwards at {backwards[:1]}"
+
+
+def test_a_table_that_has_lost_a_measurement_is_refused(monkeypatch):
+    """These tables are edited by hand, and a dropped line changes navigation silently."""
+    monkeypatch.setitem(txt, "noaa9", "\n".join(txt["noaa9"].strip().split("\n")[:-1]))
+    with pytest.raises(ValueError, match="measurement"):
+        get_offsets("noaa9")
