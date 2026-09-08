@@ -89,6 +89,38 @@ whenever possible.
 .. _PyOrbital:
     https://pyorbital.readthedocs.io
 
+
+Where the clock offsets come from
+*********************************
+
+The offsets themselves live in :mod:`pygac.clock_offsets_converter`, as one table
+per platform. Each line is a segment: a start time and the clock error there, an end
+time and the clock error there. A segment begins at a TIP clock correction and ends
+at the last measurement before the next one, so the error within a segment is a
+drift that pygac interpolates across.
+
+Tables are held for NOAA-7, -9, -11, -12 and -14. There is none for TIROS-N or
+NOAA-6, -8 or -10, and those platforms are therefore not corrected at all.
+
+The provenance of most of these numbers is not recorded. They entered pygac in 2014
+without a stated source, and only NOAA-14's origin has since been established: it was
+derived at Miami by matching coastlines, not read from a clock bulletin. That
+distinction matters more than it sounds, because the two are not measuring quite the
+same thing. A TIP clock bulletin reports what the spacecraft clock read; a
+coastline-derived table reports what timing places the imagery correctly. Comparison
+against a TBUS archive covering 1996 onwards finds NOAA-14's segment chronology
+substantially corroborated -- fifteen of eighteen correction dates match a table
+segment start within about a day -- but its values displaced by a median of +0.165 s,
+which is about one LAC scanline. Whether that displacement is an error in the table or
+a real difference between clock time and imaging time is unresolved, and it bears on
+every platform whose table came from a bulletin rather than from imagery.
+
+Users should therefore treat a correction as evidence-backed only where its provenance
+is known, and should be aware that the tables are also incomplete in time. Every one of
+them stops well before its platform did: NOAA-14's ends in August 2000 although the
+platform flew until 2007. Two of them, NOAA-12's and NOAA-14's, additionally contain
+segments that are not in time order.
+
 LAC and FRAC
 ************
 
