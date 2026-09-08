@@ -82,6 +82,12 @@ def get_config(initialized=True):
     return _config
 
 
+def reset_config():
+    """Forget any settings that have been read."""
+    global _config
+    _config = Configuration()
+
+
 def read_config_file(config_file):
     """Read a given config file."""
     config = get_config(initialized=False)
