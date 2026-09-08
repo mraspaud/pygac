@@ -249,7 +249,7 @@ sat = None
 
 def clock_table_covers(spacecraft_name, when):
     """Say whether a measured clock error is held for *spacecraft_name* at *when*."""
-    return True
+    return spacecraft_name in txt
 
 
 def get_offsets(sat):
