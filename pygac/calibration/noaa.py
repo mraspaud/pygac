@@ -87,13 +87,14 @@ def calibrate(ds, custom_coeffs=None, coeffs_file=None):
     mean_ict = ds["full_ict_counts"].mean(axis=1).data
     mean_ir_space = ds["full_space_counts"].mean(axis=1).data[:, -3:]
 
-    calibrate_thermal_channels(channels, prt, mean_ict, mean_ir_space,
-                               scan_line_numbers, calibration_coeffs)
+    _, uncalibrated = calibrate_thermal_channels(channels, prt, mean_ict, mean_ir_space,
+                                                 scan_line_numbers, calibration_coeffs)
 
     new_ds = ds.copy()
     new_ds["channels"].data = channels
 
     new_ds.attrs["calib_coeffs_version"] = calibration_coeffs.version
+    new_ds.attrs["uncalibrated_channels"] = uncalibrated
 
     return new_ds
 
@@ -458,13 +459,17 @@ def calibrate_thermal_channels(channels, prt, mean_ict, mean_ir_space,
     The blackbody temperature depends only on the PRT telemetry and the
     platform, so it is computed once here instead of being recomputed
     identically inside each of the three :func:`calibrate_thermal` calls.
+
+    Returns the channels along with the numbers of any that could not be calibrated,
+    so that a pass which ships without one can say which one it lost.
     """
     lines, columns = channels.shape[:2]
     tprt_convolved = smoothed_prt_temperature(
         prt, line_numbers, columns, cal, smoothing_window_length(lines)
     )
+    uncalibrated = []
     for channel in (3, 4, 5):
-        channels[:, :, channel - 6] = calibrate_thermal(
+        calibrated = calibrate_thermal(
             channels[:, :, channel - 6],
             prt,
             mean_ict[:, channel - 3],
@@ -474,7 +479,10 @@ def calibrate_thermal_channels(channels, prt, mean_ict, mean_ir_space,
             cal,
             tprt_convolved=tprt_convolved,
         )
-    return channels
+        if np.all(np.isnan(calibrated)):
+            uncalibrated.append(channel)
+        channels[:, :, channel - 6] = calibrated
+    return channels, uncalibrated
 
 
 def smoothed_prt_temperature(prt, line_numbers, columns, cal, wlength):
@@ -591,6 +599,15 @@ def calibrate_thermal(counts, prt, ict, space, line_numbers, channel, cal,
             return counts
         zeros = space < space_threshold
         nonzeros = np.logical_not(zeros)
+        if not nonzeros.any():
+            # Nothing to interpolate from: this channel's space view never reported.
+            # Returning empty loses the channel; raising would lose the whole pass,
+            # including channels that are perfectly sound.
+            warnings.warn(
+                f"channel {channel} reported no usable space counts, so it cannot be "
+                f"calibrated and is returned empty",
+                RuntimeWarning, stacklevel=2)
+            return np.full(counts.shape, np.nan, dtype=np.float64)
 
         space[zeros] = np.interp((zeros).nonzero()[0],
                                 (nonzeros).nonzero()[0],

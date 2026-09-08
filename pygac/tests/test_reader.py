@@ -1156,7 +1156,7 @@ def test_georeferencing_with_first_guess(pod_file_with_tbm_header, pod_tle, monk
         # This fixture has only three scan lines and no usable PRT readings,
         # so the thermal calibration cannot run on it; these tests are about
         # georeferencing.
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1189,7 +1189,7 @@ def test_georeferencing_fails(pod_file_with_tbm_header, pod_tle, monkeypatch):
         # This fixture has only three scan lines and no usable PRT readings,
         # so the thermal calibration cannot run on it; these tests are about
         # georeferencing.
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1225,7 +1225,7 @@ def test_georeferencing(pod_file_with_tbm_header, pod_tle, monkeypatch):
         # This fixture has only three scan lines and no usable PRT readings,
         # so the thermal calibration cannot run on it; these tests are about
         # georeferencing.
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1250,7 +1250,7 @@ def test_orthocorrection(pod_file_with_tbm_header, pod_tle, monkeypatch):
         # This fixture has only three scan lines and no usable PRT readings,
         # so the thermal calibration cannot run on it; these tests are about
         # georeferencing.
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1390,7 +1390,7 @@ def test_failed_pre_alignment_does_not_abandon_georeferencing(pod_file_with_tbm_
     matchable kept uncorrected navigation.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1423,7 +1423,7 @@ def test_estimated_attitude_is_labelled_in_the_unit_it_holds(pod_file_with_tbm_h
     screening on that field was reading a number 57 times too small.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1452,7 +1452,7 @@ def test_georeferencing_rejects_too_few_gcps(pod_file_with_tbm_header, pod_tle, 
     like a perfect registration.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1550,7 +1550,7 @@ def test_a_pass_is_kept_when_any_one_channel_still_carries_an_image(pod_file_wit
     doing so by day, so a pass should only be refused when no channel holds an image.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1595,7 +1595,7 @@ def test_georeferencing_accepts_a_dozen_control_points(pod_file_with_tbm_header,
     on a dozen well spread points, and passes that are not are refused on other grounds.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1621,7 +1621,7 @@ def test_rejected_georeferencing_still_records_diagnostics(pod_file_with_tbm_hea
     from one where registration was never attempted.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1650,7 +1650,7 @@ def test_georeferencing_rejects_non_finite_residual(pod_file_with_tbm_header, po
     swath, losing the pass entirely.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1677,7 +1677,7 @@ def test_georeferencing_rejects_attitude_on_its_bound(pod_file_with_tbm_header, 
     of the box.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1706,7 +1706,7 @@ def test_georeferencing_rejects_a_displacement_field_that_hangs_together_badly(
     four parameters to it produces a number rather than a position.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1743,7 +1743,7 @@ def test_a_large_residual_alone_does_not_reject_a_registration(pod_file_with_tbm
     coherence check asks it.
     """
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 
@@ -1807,7 +1807,7 @@ def test_a_disciplined_platform_does_not_have_its_time_fitted(pod_file_with_tbm_
                                                              monkeypatch):
     """The platform decides whether time is fitted, and nothing downstream would notice."""
     def skip_thermal(channels, *args, **kwargs):
-        return channels
+        return channels, []
     import pygac.calibration.noaa
     monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
 

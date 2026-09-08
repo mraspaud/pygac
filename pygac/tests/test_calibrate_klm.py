@@ -27,6 +27,7 @@
 import unittest
 
 import numpy as np
+import pytest
 
 from pygac.calibration.noaa import Calibrator, calibrate_solar, calibrate_thermal
 
@@ -69,6 +70,49 @@ class TestGenericCalibration(unittest.TestCase):
         np.testing.assert_allclose(ref1, expected[0])
         np.testing.assert_allclose(ref2, expected[1])
         np.testing.assert_allclose(ref3, expected[2])
+
+    def test_a_thermal_channel_without_space_counts_comes_back_empty(self):
+        """A channel whose calibration telemetry is dead must not take the pass with it.
+
+        One NOAA-8 pass carries zero space counts on 99.8% of its scanlines for channel
+        3, which leaves the interpolation that fills them in with nothing to work from.
+        Its visible channels agree 0.98 between neighbouring pixels and 99% of the scene
+        is sunlit, so losing the whole pass to that loses a usable scene.
+        """
+        counts = np.array([[0, 0, 612, 0, 0, 512, 512, 487, 512, 512, 923, 923, 687, 923, 923],
+                           [41, 41, 634, 41, 41, 150, 150, 461, 150, 150, 700, 700, 670, 700, 700],
+                           [241, 241, 656, 241, 241, 350, 350, 490, 350, 350, 600, 600, 475, 600, 600]])
+        prt_counts = np.array([0, 230, 230])
+        ict_counts = np.array([745.3, 744.8, 745.7])
+        no_space_counts = np.zeros(3)
+
+        cal = Calibrator("noaa19")
+        with pytest.warns(RuntimeWarning, match="channel 3"):
+            channel = calibrate_thermal(counts[:, 2::5], prt_counts, ict_counts,
+                                        no_space_counts, line_numbers=np.array([1, 2, 3]),
+                                        channel=3, cal=cal)
+
+        assert np.all(np.isnan(channel))
+
+    def test_the_thermal_channels_that_could_not_be_calibrated_are_named(self):
+        """A pass that loses a channel must say which one, not just ship without it."""
+        from pygac.calibration.noaa import calibrate_thermal_channels
+
+        lines = 3
+        channels = np.zeros((lines, 3, 6))
+        channels[:, :, -3:] = np.array([[612, 487, 687], [634, 461, 670], [656, 490, 475]])[:, :, None]
+        prt_counts = np.array([0, 230, 230])
+        mean_ict = np.tile(np.array([745.3, 397.9, 377.8]), (lines, 1))
+        mean_space = np.tile(np.array([987.3, 992.5, 989.4]), (lines, 1))
+        mean_space[:, 0] = 0.0            # channel 3's space view never reported
+
+        cal = Calibrator("noaa19")
+        with pytest.warns(RuntimeWarning, match="channel 3"):
+            _, uncalibrated = calibrate_thermal_channels(
+                channels, prt_counts, mean_ict, mean_space,
+                line_numbers=np.array([1, 2, 3]), cal=cal)
+
+        assert uncalibrated == [3]
 
     def test_calibration_ir(self):
         counts = np.array([[0, 0, 612, 0, 0,
