@@ -1925,6 +1925,18 @@ def test_noaa16_scans_the_narrower_angle_it_was_always_given():
     assert max_scan_angle_for("noaa16") == 55.25
 
 
+def test_a_scan_angle_named_in_the_configuration_is_used(tmp_path):
+    """An operator retunes a platform without editing pygac, as an FDR runner must allow."""
+    from pygac.configuration import read_config_file, reset_config
+    settings = tmp_path / "pygac.cfg"
+    settings.write_text("[scan_angles]\nnoaa19 = 55.301\n")
+    read_config_file(str(settings))
+    try:
+        assert max_scan_angle_for("noaa19") == 55.301
+    finally:
+        reset_config()
+
+
 def test_the_pod_platforms_need_their_clock_fitted():
     """POD clocks drift by seconds; one pass in the sample sits 27 s along its own track."""
     assert clock_needs_fitting("noaa14")

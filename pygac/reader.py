@@ -46,6 +46,7 @@ from pyorbital.geoloc import compute_pixels, get_lonlatalt
 from pyorbital.orbital import Orbital
 
 from pygac import gac_io
+from pygac.configuration import get_config
 from pygac.utils import calculate_sun_earth_distance_correction, centered_modulus, get_absolute_azimuth_angle_diff
 
 LOG = logging.getLogger(__name__)
@@ -161,14 +162,21 @@ NOMINAL_MAX_SCAN_ANGLE = 55.37
 
 #: Platforms measured to scan a different angle from the nominal one, and the angle each
 #: was measured at. Nominally identical instruments do not scan identically: Metop-A, -B
-#: and -C were built together and sit 0.05 degrees apart. Anything absent is navigated at
-#: the nominal angle. noaa16 measures 55.22 against 55.34 for the rest of the record, and
-#: carries the value pygac has always given it, pending a wider sample than two passes.
+#: and -C were built together and sit 0.05 degrees apart. noaa16 measures 55.22 against
+#: 55.34 for the rest of the record, and carries the value pygac has always given it,
+#: pending a wider sample than two passes.
+#:
+#: A `[scan_angles]` section in the configuration names an angle per platform and is
+#: consulted first, so an operator retunes a platform without editing this table. A
+#: platform named in neither is navigated at the nominal angle.
 MAX_SCAN_ANGLES = {"noaa16": 55.25}
 
 
 def max_scan_angle_for(spacecraft_name):
     """Give the half-swath angle *spacecraft_name* scans."""
+    settings = get_config(initialized=False)
+    if settings.has_option("scan_angles", spacecraft_name):
+        return settings.getfloat("scan_angles", spacecraft_name)
     return MAX_SCAN_ANGLES.get(spacecraft_name, NOMINAL_MAX_SCAN_ANGLE)
 
 
