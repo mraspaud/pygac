@@ -1863,8 +1863,8 @@ def test_a_platform_is_navigated_at_the_angle_it_scans(pod_file_with_tbm_header,
 
 
 def test_a_drifting_platform_is_fitted_whatever_the_image_says():
-    """Its clock is not trusted, so nothing the coarse match reports changes that."""
-    assert should_fit_the_clock("noaa14", 0.0)
+    """noaa10 holds no clock table, so nothing the coarse match reports changes that."""
+    assert should_fit_the_clock("noaa10", 0.0)
 
 
 def test_a_disciplined_platform_holding_its_time_is_not_fitted():
