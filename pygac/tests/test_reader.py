@@ -1937,6 +1937,11 @@ def test_a_scan_angle_named_in_the_configuration_is_used(tmp_path):
         reset_config()
 
 
+def test_noaa14_holds_a_clock_table_worth_believing():
+    """It came from published clock offsets, not from anything derived here."""
+    assert not clock_needs_fitting("noaa14")
+
+
 def test_a_pod_platform_without_a_clock_table_is_fitted():
     """noaa10 holds no table at all, and its passes sit about a second along their track."""
     assert clock_needs_fitting("noaa10")

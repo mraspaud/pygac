@@ -151,10 +151,14 @@ FIRST_DISCIPLINED_NOAA = 15
 
 #: POD platforms whose drift pygac takes out from a table of measured clock errors that
 #: is trusted. On these the correction leaves a scanline or less: it turns +1.35 s into
-#: -0.09 s on noaa9, and what remains matches the KLM and Metop noise floor. NOAA-14 has
-#: a table too, but it was derived by matching coastlines and is not trusted; the one
-#: pass we can check it against is 27 s out after correcting.
-POD_WITH_A_TRUSTED_CLOCK = frozenset({"noaa7", "noaa9", "noaa11", "noaa12"})
+#: -0.09 s on noaa9, and what remains matches the KLM and Metop noise floor.
+#:
+#: noaa14 belongs here on provenance: its table came from published clock offsets, as
+#: did noaa7's, noaa9's and noaa11's, while noaa12's was fitted to imagery for the ESA
+#: Cloud_cci AVHRR GAC record. On a platform in this set, whatever its table still
+#: leaves is taken up by the pitch rather than reported as a time offset. The platforms
+#: absent from this set hold no table at all and must be fitted.
+POD_WITH_A_TRUSTED_CLOCK = frozenset({"noaa7", "noaa9", "noaa11", "noaa12", "noaa14"})
 
 #: The scan steps 0.05409868099 degrees between samples, so the outermost of the 2048
 #: puts its centre at 0.05409868099 * 1023.5 degrees from nadir (KLM Guide, Appendix J).
