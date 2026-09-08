@@ -249,12 +249,12 @@ txt = {"noaa14":
 sat = None
 
 
-def clock_measurements_reach(spacecraft_name, when):
-    """Say whether *spacecraft_name*'s measured clock errors reach as late as *when*."""
+def clock_table_covers(spacecraft_name, when):
+    """Say whether *spacecraft_name*'s clock was measured either side of *when*."""
     if spacecraft_name not in txt:
         return False
     measured, _ = get_offsets(spacecraft_name)
-    return when <= np.datetime64(max(measured))
+    return np.datetime64(min(measured)) <= when <= np.datetime64(max(measured))
 
 
 #: How many measurements a table is known to hold. These tables are edited by hand, and a
