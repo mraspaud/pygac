@@ -102,18 +102,27 @@ drift that pygac interpolates across.
 Tables are held for NOAA-7, -9, -11, -12 and -14. There is none for TIROS-N or
 NOAA-6, -8 or -10, and those platforms are therefore not corrected at all.
 
-The provenance of most of these numbers is not recorded. They entered pygac in 2014
-without a stated source, and only NOAA-14's origin has since been established: it was
-derived at Miami by matching coastlines, not read from a clock bulletin. That
-distinction matters more than it sounds, because the two are not measuring quite the
-same thing. A TIP clock bulletin reports what the spacecraft clock read; a
-coastline-derived table reports what timing places the imagery correctly. Comparison
-against a TBUS archive covering 1996 onwards finds NOAA-14's segment chronology
-substantially corroborated -- fifteen of eighteen correction dates match a table
-segment start within about a day -- but its values displaced by a median of +0.165 s,
-which is about one LAC scanline. Whether that displacement is an error in the table or
-a real difference between clock time and imaging time is unresolved, and it bears on
-every platform whose table came from a bulletin rather than from imagery.
+The tables come from two different places, and the difference matters.
+
+Those for NOAA-7, -9, -11 and -14 were added together in August 2014 from clock offsets
+published online, of which NOAA's Office of Satellite and Product Operations is the cited
+source. They describe the spacecraft clock.
+
+NOAA-12's was added separately in 2018 because no published offsets covered that platform.
+It was derived by coregistering L1B imagery against the NASA Blue Marble reference and
+fitting a piecewise linear drift, with punctual clock corrections taken from the published
+files; the method is described in the ESA Cloud_cci report on AVHRR GAC FCDR generation
+(Cloud_cci_RAFCDR_v1.0, 10 May 2017). It therefore describes the timing that places the
+imagery correctly, which is not quite the same quantity. That report also notes NOAA-12's
+offsets are less certain than other platforms', because the spacecraft's pointing was not
+held stable.
+
+The distinction is not academic. Comparison of NOAA-14's table against a TBUS bulletin
+archive covering 1996 onwards finds its segment chronology substantially corroborated --
+fifteen of eighteen correction dates match a table segment start within about a day -- but
+its values displaced by a median of +0.165 s, about one LAC scanline. Whether that is an
+error in the table or a real difference between clock time and imaging time is unresolved,
+and it would apply to every clock-derived table and not to an imagery-derived one.
 
 Users should therefore treat a correction as evidence-backed only where its provenance
 is known, and should be aware that the tables are also incomplete in time. Every one of
