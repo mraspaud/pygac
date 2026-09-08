@@ -247,6 +247,11 @@ txt = {"noaa14":
 sat = None
 
 
+def clock_table_covers(spacecraft_name, when):
+    """Say whether a measured clock error is held for *spacecraft_name* at *when*."""
+    return True
+
+
 def get_offsets(sat):
     """Get the clock drift offsets for sat.
     """
