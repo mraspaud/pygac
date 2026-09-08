@@ -161,9 +161,10 @@ NOMINAL_MAX_SCAN_ANGLE = 55.37
 
 #: Platforms measured to scan a different angle from the nominal one, and the angle each
 #: was measured at. Nominally identical instruments do not scan identically: Metop-A, -B
-#: and -C were built together and sit 0.05 degrees apart. Empty until a set of measurements
-#: is adopted, so that every platform is navigated at the nominal angle until then.
-MAX_SCAN_ANGLES = {}
+#: and -C were built together and sit 0.05 degrees apart. Anything absent is navigated at
+#: the nominal angle. noaa16 measures 55.22 against 55.34 for the rest of the record, and
+#: carries the value pygac has always given it, pending a wider sample than two passes.
+MAX_SCAN_ANGLES = {"noaa16": 55.25}
 
 
 def max_scan_angle_for(spacecraft_name):

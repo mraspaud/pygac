@@ -1919,6 +1919,12 @@ def test_a_disciplined_platform_that_drifted_has_its_time_fitted(pod_file_with_t
     assert dataset.attrs["estimated_time_offset_in_seconds"] == pytest.approx(drifted)
 
 
+def test_noaa16_scans_the_narrower_angle_it_was_always_given():
+    """Measured at 55.22, against 55.34 for the rest; the historical value stands until
+    a wider sample than two consecutive days is in."""
+    assert max_scan_angle_for("noaa16") == 55.25
+
+
 def test_the_pod_platforms_need_their_clock_fitted():
     """POD clocks drift by seconds; one pass in the sample sits 27 s along its own track."""
     assert clock_needs_fitting("noaa14")
