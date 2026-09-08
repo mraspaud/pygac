@@ -24,6 +24,8 @@
 """
 from datetime import datetime
 
+import numpy as np
+
 txt = {"noaa14":
        """95013 	223633 	-0.37 	95213 	233350 	0.59
 95214 	011409 	-0.93 	95365 	225835 	0.04
@@ -249,7 +251,10 @@ sat = None
 
 def clock_table_covers(spacecraft_name, when):
     """Say whether a measured clock error is held for *spacecraft_name* at *when*."""
-    return spacecraft_name in txt
+    if spacecraft_name not in txt:
+        return False
+    measured, _ = get_offsets(spacecraft_name)
+    return when <= np.datetime64(max(measured))
 
 
 def get_offsets(sat):
