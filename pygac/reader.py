@@ -1054,7 +1054,8 @@ class Reader(ABC):
             calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem)
         time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = fit_navigation(
             calibrated_ds, gcps, gcp_lonlats,
-            should_fit_the_clock(self.spacecraft_name, along_track_seconds),
+            should_fit_the_clock(self.spacecraft_name, along_track_seconds,
+                                 self.get_times()[0]),
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
             time_offset_guess=along_track_seconds,
