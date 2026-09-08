@@ -33,7 +33,7 @@ import types
 import warnings
 from abc import ABC, abstractmethod
 from contextlib import suppress
-from functools import cached_property
+from functools import cached_property, partial
 from importlib.metadata import entry_points
 
 import geotiepoints as gtp
@@ -169,6 +169,28 @@ MAX_SCAN_ANGLES = {}
 def max_scan_angle_for(spacecraft_name):
     """Give the half-swath angle *spacecraft_name* scans."""
     return MAX_SCAN_ANGLES.get(spacecraft_name, NOMINAL_MAX_SCAN_ANGLE)
+
+
+#: How far along its own track a pass may sit before its platform's clock stops being
+#: worth believing, in seconds. One LAC scanline is a sixth of a second, and across the
+#: sample no disciplined platform leaves one: Metop reaches 0.16 s, KLM 0.17 s, noaa9
+#: 0.16 s. Three scanlines therefore refuses nothing we have seen, while holding the
+#: pitch a pass may absorb to a quarter of a degree instead of nearly a whole one.
+A_TRUSTED_CLOCK_HOLDS_WITHIN_S = 0.5
+
+
+def should_fit_the_clock(spacecraft_name, along_track_seconds):
+    """Say whether to fit a time offset for this pass."""
+    if clock_needs_fitting(spacecraft_name):
+        return True
+    if abs(along_track_seconds) > A_TRUSTED_CLOCK_HOLDS_WITHIN_S:
+        warnings.warn(
+            f"{spacecraft_name} holds a disciplined clock, but this pass sits "
+            f"{along_track_seconds:+.2f} s along its own track; its time is being fitted "
+            f"rather than taken at zero",
+            RuntimeWarning, stacklevel=2)
+        return True
+    return False
 
 
 def clock_needs_fitting(spacecraft_name):
@@ -1015,7 +1037,7 @@ class Reader(ABC):
             calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem,
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
-            solve_for_time=clock_needs_fitting(self.spacecraft_name),
+            solve_for_time=partial(should_fit_the_clock, self.spacecraft_name),
         )
 
         # Record how the fit was judged before deciding, so a rejected pass is

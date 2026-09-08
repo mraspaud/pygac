@@ -44,6 +44,7 @@ from pygac.reader import (
     NoTLEData,
     clock_needs_fitting,
     max_scan_angle_for,
+    should_fit_the_clock,
     yaw_steers,
 )
 
@@ -1853,6 +1854,60 @@ def test_a_platform_is_navigated_at_the_angle_it_scans(pod_file_with_tbm_header,
     assert np.abs(narrower - nominal).max() > 0.01
 
 
+def test_a_drifting_platform_is_fitted_whatever_the_image_says():
+    """Its clock is not trusted, so nothing the coarse match reports changes that."""
+    assert should_fit_the_clock("noaa14", 0.0)
+
+
+def test_a_disciplined_platform_holding_its_time_is_not_fitted():
+    """Fitting an offset known to be zero only lets the pitch absorb its noise."""
+    assert not should_fit_the_clock("noaa19", 0.1)
+
+
+def test_a_disciplined_platform_far_along_its_track_is_fitted_after_all():
+    """The pass is evidence about itself; holding time at zero would hand it to the pitch."""
+    assert should_fit_the_clock("noaa19", 1.0)
+
+
+def test_a_pass_that_slid_backwards_is_fitted_too():
+    """A pass can sit early or late on its track, and neither is a clock worth trusting."""
+    assert should_fit_the_clock("noaa19", -1.0)
+
+
+def test_distrusting_a_platform_clock_says_so_loudly():
+    """The platform policy has been overruled by one pass, which nothing else would reveal."""
+    with pytest.warns(RuntimeWarning, match="clock"):
+        should_fit_the_clock("noaa19", 1.0)
+
+
+def test_a_disciplined_platform_that_drifted_has_its_time_fitted(pod_file_with_tbm_header,
+                                                                 pod_tle, monkeypatch):
+    """The georeferencer measures the drift; whether to act on it is pygac's to answer."""
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    drifted = 3.0
+
+    def measures_a_drift(calibrated_ds, *args, solve_for_time=None, **rest):
+        record_a_coherent_field(calibrated_ds)
+        fitted = drifted if solve_for_time(drifted) else 0.0
+        return fitted, (0, 0, 0), ([10000] * 60, [1000] * 60)
+
+    from georeferencer import georeferencer
+    monkeypatch.setattr(georeferencer, "get_swath_displacement", measures_a_drift)
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    reader.spacecraft_name = "noaa19"
+
+    with pytest.warns(RuntimeWarning, match="clock"):
+        dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["estimated_time_offset_in_seconds"] == pytest.approx(drifted)
+
+
 def test_the_pod_platforms_need_their_clock_fitted():
     """POD clocks drift by seconds; one pass in the sample sits 27 s along its own track."""
     assert clock_needs_fitting("noaa14")
@@ -1887,32 +1942,6 @@ def test_a_steered_platform_is_navigated_differently(pod_file_with_tbm_header, p
 def test_the_pod_platforms_with_a_trusted_clock_table_are_not_fitted_either():
     """Where pygac corrects the clock from measurement, what is left is a scanline or less."""
     assert not clock_needs_fitting("noaa9")
-
-
-def test_a_disciplined_platform_does_not_have_its_time_fitted(pod_file_with_tbm_header, pod_tle,
-                                                             monkeypatch):
-    """The platform decides whether time is fitted, and nothing downstream would notice."""
-    def skip_thermal(channels, *args, **kwargs):
-        return channels, []
-    import pygac.calibration.noaa
-    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
-
-    asked = {}
-
-    def mock_disp(calibrated_ds, *args, **rest):
-        asked.update(rest)
-        record_a_coherent_field(calibrated_ds)
-        return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
-
-    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
-                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
-    reader.read(pod_file_with_tbm_header)
-    reader.spacecraft_name = "noaa19"
-    reader.get_calibrated_dataset()
-
-    assert asked["solve_for_time"] is False
 
 
 def test_the_geolocation_names_its_nadir_convention(pod_file_with_tbm_header, pod_tle):
