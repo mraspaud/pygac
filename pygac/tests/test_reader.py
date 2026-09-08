@@ -1816,6 +1816,27 @@ def test_a_platform_measured_to_scan_differently_gets_its_own_angle(monkeypatch)
     assert max_scan_angle_for("metopa") == 55.245
 
 
+def test_the_recorded_scan_angle_is_the_one_its_platform_scans(pod_file_with_tbm_header,
+                                                               pod_tle, monkeypatch):
+    """The attitude fit reads this attribute, so it has to name the swath it navigates."""
+    reader = LACPODReader(interpolate_coords=True, tle_dir=pod_tle.parent, tle_name=pod_tle.name)
+    reader.read(pod_file_with_tbm_header)
+    monkeypatch.setitem(MAX_SCAN_ANGLES, reader.spacecraft_name, 55.245)
+
+    assert reader.create_counts_dataset().attrs["max_scan_angle"] == 55.245
+
+
+def test_noaa16_records_the_angle_it_is_navigated_at(pod_file_with_tbm_header, pod_tle):
+    """Its fit was handed a swath 0.12 degrees narrower than the one its navigation drew."""
+    reader = LACPODReader(interpolate_coords=True, tle_dir=pod_tle.parent, tle_name=pod_tle.name)
+    reader.read(pod_file_with_tbm_header)
+    reader.spacecraft_name = "noaa16"
+
+    recorded = reader.create_counts_dataset().attrs["max_scan_angle"]
+
+    assert recorded == max_scan_angle_for("noaa16")
+
+
 def test_a_platform_is_navigated_at_the_angle_it_scans(pod_file_with_tbm_header, pod_tle,
                                                       monkeypatch):
     """The swath the fit is given and the swath the navigation draws must be the same one."""
