@@ -1050,16 +1050,19 @@ class Reader(ABC):
         from georeferencer.georeferencer import fit_navigation, measure_swath_displacement
 
         _, sat_zen, _, sun_zen, _ = self.get_angles()
+        when = self.get_times()[0]
         gcps, gcp_lonlats, along_track_seconds = measure_swath_displacement(
             calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem)
         time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = fit_navigation(
             calibrated_ds, gcps, gcp_lonlats,
-            should_fit_the_clock(self.spacecraft_name, along_track_seconds,
-                                 self.get_times()[0]),
+            should_fit_the_clock(self.spacecraft_name, along_track_seconds, when),
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
             time_offset_guess=along_track_seconds,
         )
+
+        calibrated_ds.attrs["clock_table_covers_the_pass"] = bool(
+            clock_table_covers(self.spacecraft_name, when))
 
         # Record how the fit was judged before deciding, so a rejected pass is
         # distinguishable downstream from one never attempted.

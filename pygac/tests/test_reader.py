@@ -1961,6 +1961,35 @@ def test_a_pass_past_its_platform_table_is_fitted_end_to_end(pod_file_with_tbm_h
     assert dataset.attrs["estimated_time_offset_in_seconds"] == pytest.approx(fitted)
 
 
+def test_a_pass_records_whether_a_clock_measurement_reached_it(pod_file_with_tbm_header,
+                                                              pod_tle, monkeypatch):
+    """Whether the time was fitted or taken from a table is provenance the campaign has
+    to be able to read back off the product."""
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    def measures_no_drift(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return np.zeros((60, 2)), np.zeros((60, 2)), 0.0
+
+    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
+        return 0.0, (0, 0, 0), ([10000] * 60, [1000] * 60)
+
+    from georeferencer import georeferencer
+    monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures_no_drift)
+    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    reader.spacecraft_name = "noaa14"
+
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["clock_table_covers_the_pass"] is False
+
+
 def test_noaa16_scans_the_narrower_angle_it_was_always_given():
     """Measured at 55.22, against 55.34 for the rest; the historical value stands until
     a wider sample than two consecutive days is in."""
