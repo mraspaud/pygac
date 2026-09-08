@@ -1937,9 +1937,9 @@ def test_a_scan_angle_named_in_the_configuration_is_used(tmp_path):
         reset_config()
 
 
-def test_the_pod_platforms_need_their_clock_fitted():
-    """POD clocks drift by seconds; one pass in the sample sits 27 s along its own track."""
-    assert clock_needs_fitting("noaa14")
+def test_a_pod_platform_without_a_clock_table_is_fitted():
+    """noaa10 holds no table at all, and its passes sit about a second along their track."""
+    assert clock_needs_fitting("noaa10")
 
 
 def test_the_disciplined_clocks_are_taken_at_their_word():
