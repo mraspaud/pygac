@@ -33,7 +33,7 @@ import types
 import warnings
 from abc import ABC, abstractmethod
 from contextlib import suppress
-from functools import cached_property, partial
+from functools import cached_property
 from importlib.metadata import entry_points
 
 import geotiepoints as gtp
@@ -1030,14 +1030,17 @@ class Reader(ABC):
             else:
                 calibrated_ds.attrs["pre_alignment_applied"] = True
 
-        from georeferencer.georeferencer import get_swath_displacement
+        from georeferencer.georeferencer import fit_navigation, measure_swath_displacement
 
         _, sat_zen, _, sun_zen, _ = self.get_angles()
-        time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = get_swath_displacement(
-            calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem,
+        gcps, gcp_lonlats, along_track_seconds = measure_swath_displacement(
+            calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem)
+        time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = fit_navigation(
+            calibrated_ds, gcps, gcp_lonlats,
+            should_fit_the_clock(self.spacecraft_name, along_track_seconds),
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
-            solve_for_time=partial(should_fit_the_clock, self.spacecraft_name),
+            time_offset_guess=along_track_seconds,
         )
 
         # Record how the fit was judged before deciding, so a rejected pass is

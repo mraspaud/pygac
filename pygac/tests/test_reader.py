@@ -1170,8 +1170,7 @@ def test_georeferencing_with_first_guess(pod_file_with_tbm_header, pod_tle, monk
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name, compute_lonlats_from_tles=True,
                           reference_image="some_world_image.tif", adjust_clock_drift=False)
     def file_lonlats(self, *args, **kwargs):
@@ -1203,13 +1202,32 @@ def test_georeferencing_fails(pod_file_with_tbm_header, pod_tle, monkeypatch):
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0, (0, 0, 0), ([10000], [10000])
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name, compute_lonlats_from_tles=True,
                           reference_image="some_world_image.tif")
     reader.read(pod_file_with_tbm_header)
     with pytest.warns(RuntimeWarning):
         _ = reader.get_calibrated_dataset()
+
+
+def use_a_stub_georeferencer(monkeypatch, stub):
+    """Install a stub for the two calls pygac makes, given one written as a single answer.
+
+    pygac measures the displacement, decides from it whether the platform's clock is worth
+    fitting, and only then fits. A test that only cares what comes back from the fit says so
+    once, here, rather than spelling both halves out.
+    """
+    from georeferencer import georeferencer
+
+    def measures(calibrated_ds, *args, **rest):
+        measures.answer = stub(calibrated_ds, *args, **rest)
+        return np.zeros((60, 2)), np.zeros((60, 2)), 0.0
+
+    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
+        return measures.answer
+
+    monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures)
+    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
 
 
 def record_a_coherent_field(calibrated_ds, count=60):
@@ -1239,8 +1257,7 @@ def test_georeferencing(pod_file_with_tbm_header, pod_tle, monkeypatch):
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0.5, (0, 0, 0), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name, compute_lonlats_from_tles=True,
                           reference_image="some_world_image.tif")
     reader.read(pod_file_with_tbm_header)
@@ -1264,8 +1281,7 @@ def test_orthocorrection(pod_file_with_tbm_header, pod_tle, monkeypatch):
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0.5, (0, 0, 0), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name, compute_lonlats_from_tles=True,
                           reference_image="some_world_image.tif", dem="dem_file.tif")
     reader.read(pod_file_with_tbm_header)
@@ -1276,6 +1292,7 @@ def test_orthocorrection(pod_file_with_tbm_header, pod_tle, monkeypatch):
         calibrated_ds["tc_lats"] = calibrated_ds["latitude"] + 0.0001
         return calibrated_ds
 
+    from georeferencer import georeferencer
     monkeypatch.setattr(georeferencer, "orthocorrection", mock_orthocorrection)
     dataset = reader.get_calibrated_dataset()
 
@@ -1409,8 +1426,7 @@ def test_failed_pre_alignment_does_not_abandon_georeferencing(pod_file_with_tbm_
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif",
@@ -1438,8 +1454,7 @@ def test_estimated_attitude_is_labelled_in_the_unit_it_holds(pod_file_with_tbm_h
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0, attitude, ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1467,8 +1482,7 @@ def test_georeferencing_rejects_too_few_gcps(pod_file_with_tbm_header, pod_tle, 
         record_a_coherent_field(calibrated_ds)
         # one control point, and a residual that looks flawless
         return 0, (0, 0, 0), ([10000], [0.002])
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1641,8 +1655,7 @@ def test_georeferencing_accepts_a_dozen_control_points(pod_file_with_tbm_header,
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds, count=12)
         return 0, (0, 0, 0), ([10000] * 12, [1000] * 12)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1667,8 +1680,7 @@ def test_rejected_georeferencing_still_records_diagnostics(pod_file_with_tbm_hea
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds, count=8)
         return 0, (0, 0, 0), ([10000] * 8, [10000] * 8)   # rejected: too few points
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1696,8 +1708,7 @@ def test_georeferencing_rejects_non_finite_residual(pod_file_with_tbm_header, po
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0, (0, 0, 0), ([10000] * 60, [np.nan] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1724,8 +1735,7 @@ def test_georeferencing_rejects_attitude_on_its_bound(pod_file_with_tbm_header, 
         record_a_coherent_field(calibrated_ds)
         # plenty of points and a plausible residual, but a cornered attitude
         return 0, (0.5, -0.5, 0.5), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1758,8 +1768,7 @@ def test_georeferencing_rejects_a_displacement_field_that_hangs_together_badly(
                              ("gcp_x_displacement", rng.uniform(-24, 24, size=60))):
             calibrated_ds[name] = xr.DataArray(values, dims=["points"])
         return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1789,8 +1798,7 @@ def test_a_large_residual_alone_does_not_reject_a_registration(pod_file_with_tbm
     def mock_disp(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
         return 0, (0, 0, 0), ([20000] * 60, [10000] * 60)
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", mock_disp)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
 
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
@@ -1882,7 +1890,7 @@ def test_distrusting_a_platform_clock_says_so_loudly():
 
 def test_a_disciplined_platform_that_drifted_has_its_time_fitted(pod_file_with_tbm_header,
                                                                  pod_tle, monkeypatch):
-    """The georeferencer measures the drift; whether to act on it is pygac's to answer."""
+    """pygac measures the drift, decides what it means, and only then fits."""
     def skip_thermal(channels, *args, **kwargs):
         return channels, []
     import pygac.calibration.noaa
@@ -1890,13 +1898,16 @@ def test_a_disciplined_platform_that_drifted_has_its_time_fitted(pod_file_with_t
 
     drifted = 3.0
 
-    def measures_a_drift(calibrated_ds, *args, solve_for_time=None, **rest):
+    def measures_a_drift(calibrated_ds, *args, **rest):
         record_a_coherent_field(calibrated_ds)
-        fitted = drifted if solve_for_time(drifted) else 0.0
-        return fitted, (0, 0, 0), ([10000] * 60, [1000] * 60)
+        return np.zeros((60, 2)), np.zeros((60, 2)), drifted
+
+    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
+        return (drifted if solve_for_time else 0.0), (0, 0, 0), ([10000] * 60, [1000] * 60)
 
     from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "get_swath_displacement", measures_a_drift)
+    monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures_a_drift)
+    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
     reader.read(pod_file_with_tbm_header)
