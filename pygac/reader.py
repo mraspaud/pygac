@@ -148,6 +148,29 @@ def yaw_steers(spacecraft_name):
     return spacecraft_name.startswith("metop")
 
 
+#: Platforms whose clock is steered in flight throughout their life, so that a pass
+#: can be navigated with its time held at zero and its pitch fitted instead.
+#:
+#: Only Metop qualifies. A POD platform drifts between resets, and while the KLM
+#: series is corrected daily we have no evidence that held across the whole record.
+#: Crediting a platform here pins its time and hands whatever remains to the pitch,
+#: which the two are free to exchange at 2.25 s per degree -- so a platform wrongly
+#: listed reports an attitude it does not have and navigates no better for it.
+#:
+#: A `[trusted_clocks]` section in the configuration names a platform and whether its
+#: clock is believed, and is consulted first, so a platform shown to hold its time is
+#: promoted without changing code.
+PLATFORMS_WITH_A_TRUSTED_CLOCK = ("metopa", "metopb", "metopc")
+
+
+def has_a_trusted_clock(spacecraft_name):
+    """Say whether *spacecraft_name* keeps time well enough to navigate on it."""
+    settings = get_config(initialized=False)
+    if settings.has_option("trusted_clocks", spacecraft_name):
+        return settings.getboolean("trusted_clocks", spacecraft_name)
+    return spacecraft_name in PLATFORMS_WITH_A_TRUSTED_CLOCK
+
+
 #: The first NOAA platform of the KLM series, whose clock is updated daily. Everything
 #: numbered below it belongs to the POD series, whose clock drifts between resets.
 FIRST_DISCIPLINED_NOAA = 15

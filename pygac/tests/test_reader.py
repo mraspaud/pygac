@@ -43,6 +43,7 @@ from pygac.reader import (
     MAX_SCAN_ANGLES,
     NoTLEData,
     clock_needs_fitting,
+    has_a_trusted_clock,
     max_scan_angle_for,
     should_fit_the_clock,
     yaw_steers,
@@ -1865,6 +1866,23 @@ def test_a_platform_is_navigated_at_the_angle_it_scans(pod_file_with_tbm_header,
     assert np.abs(narrower - nominal).max() > 0.01
 
 
+def test_only_metop_is_credited_with_a_trusted_clock():
+    """Every platform but Metop drifts at some point in its life.
+
+    A POD platform drifts between resets, and a KLM platform's daily correction
+    is not evidenced across the whole record. Crediting one of them with a
+    trusted clock pins its time at zero and hands the residual to the pitch,
+    which is the degeneracy this campaign keeps falling into. Metop is the one
+    series whose clock is steered in flight throughout.
+    """
+    assert has_a_trusted_clock("metopa")
+    assert has_a_trusted_clock("metopb")
+    assert has_a_trusted_clock("metopc")
+    assert not has_a_trusted_clock("noaa14")
+    assert not has_a_trusted_clock("noaa19")
+    assert not has_a_trusted_clock("noaa10")
+
+
 def test_a_drifting_platform_is_fitted_whatever_the_image_says():
     """noaa10 holds no clock table, so nothing the coarse match reports changes that."""
     assert should_fit_the_clock("noaa10", 0.0)
@@ -2007,6 +2025,23 @@ def test_a_scan_angle_named_in_the_configuration_is_used(tmp_path):
     read_config_file(str(settings))
     try:
         assert max_scan_angle_for("noaa19") == 55.301
+    finally:
+        reset_config()
+
+
+def test_a_clock_named_in_the_configuration_is_believed_or_not(tmp_path):
+    """A platform shown to hold its time is promoted without editing pygac.
+
+    Whether a clock can be navigated on is a finding about a platform, not a fact
+    about this code, so an FDR runner must be able to state it per platform.
+    """
+    from pygac.configuration import read_config_file, reset_config
+    settings = tmp_path / "pygac.cfg"
+    settings.write_text("[trusted_clocks]\nnoaa19 = yes\nmetopb = no\n")
+    read_config_file(str(settings))
+    try:
+        assert has_a_trusted_clock("noaa19")
+        assert not has_a_trusted_clock("metopb")
     finally:
         reset_config()
 
