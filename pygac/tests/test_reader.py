@@ -42,7 +42,6 @@ from pygac.pod_reader import tbm_header as tbm_header_dtype
 from pygac.reader import (
     MAX_SCAN_ANGLES,
     NoTLEData,
-    clock_needs_fitting,
     has_a_trusted_clock,
     max_scan_angle_for,
     should_fit_the_clock,
@@ -1883,72 +1882,19 @@ def test_only_metop_is_credited_with_a_trusted_clock():
     assert not has_a_trusted_clock("noaa10")
 
 
-def test_a_drifting_platform_is_fitted_whatever_the_image_says():
-    """noaa10 holds no clock table, so nothing the coarse match reports changes that."""
-    assert should_fit_the_clock("noaa10", 0.0)
+def test_whether_to_fit_the_clock_is_settled_by_the_platform_alone():
+    """The choice is a property of the platform and of nothing about the pass.
 
-
-def test_a_disciplined_platform_holding_its_time_is_not_fitted():
-    """Fitting an offset known to be zero only lets the pitch absorb its noise."""
-    assert not should_fit_the_clock("noaa19", 0.1)
-
-
-def test_a_disciplined_platform_far_along_its_track_is_fitted_after_all():
-    """The pass is evidence about itself; holding time at zero would hand it to the pitch."""
-    assert should_fit_the_clock("noaa19", 1.0)
-
-
-def test_a_pass_that_slid_backwards_is_fitted_too():
-    """A pass can sit early or late on its track, and neither is a clock worth trusting."""
-    assert should_fit_the_clock("noaa19", -1.0)
-
-
-def test_a_trusted_platform_past_its_clock_table_is_fitted():
-    """noaa14's table stops in August 2000 but it flew to 2007; beyond the table the
-    correction is only its last measurement held flat, so the time must be fitted."""
-    assert should_fit_the_clock("noaa14", 0.0, np.datetime64("2003-06-01T00:00:00"))
-
-
-def test_a_platform_needing_no_clock_table_is_not_fitted_for_want_of_one():
-    """metopb steers its own clock and was never given a drift table to run out of."""
-    assert not should_fit_the_clock("metopb", 0.0, np.datetime64("2019-06-01T00:00:00"))
-
-
-def test_distrusting_a_platform_clock_says_so_loudly():
-    """The platform policy has been overruled by one pass, which nothing else would reveal."""
-    with pytest.warns(RuntimeWarning, match="clock"):
-        should_fit_the_clock("noaa19", 1.0)
-
-
-def test_a_disciplined_platform_that_drifted_has_its_time_fitted(pod_file_with_tbm_header,
-                                                                 pod_tle, monkeypatch):
-    """pygac measures the drift, decides what it means, and only then fits."""
-    def skip_thermal(channels, *args, **kwargs):
-        return channels, []
-    import pygac.calibration.noaa
-    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
-
-    drifted = 3.0
-
-    def measures_a_drift(calibrated_ds, *args, **rest):
-        record_a_coherent_field(calibrated_ds)
-        return np.zeros((60, 2)), np.zeros((60, 2)), drifted
-
-    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
-        return (drifted if solve_for_time else 0.0), (0, 0, 0), ([10000] * 60, [1000] * 60)
-
-    from georeferencer import georeferencer
-    monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures_a_drift)
-    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
-    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
-                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
-    reader.read(pod_file_with_tbm_header)
-    reader.spacecraft_name = "noaa19"
-
-    with pytest.warns(RuntimeWarning, match="clock"):
-        dataset = reader.get_calibrated_dataset()
-
-    assert dataset.attrs["estimated_time_offset_in_seconds"] == pytest.approx(drifted)
+    Deciding per pass -- on how far along its track a pass sits, or on whether a
+    clock table reaches it -- lets the same platform report a time offset on one
+    pass and a pitch on the next, from data that cannot tell the two apart. Every
+    platform but Metop therefore has its time fitted, always.
+    """
+    assert should_fit_the_clock("noaa10")
+    assert should_fit_the_clock("noaa14")
+    assert should_fit_the_clock("noaa19")
+    assert not should_fit_the_clock("metopa")
+    assert not should_fit_the_clock("metopb")
 
 
 def test_a_pass_past_its_platform_table_is_fitted_end_to_end(pod_file_with_tbm_header,
@@ -2046,22 +1992,6 @@ def test_a_clock_named_in_the_configuration_is_believed_or_not(tmp_path):
         reset_config()
 
 
-def test_noaa14_holds_a_clock_table_worth_believing():
-    """It came from published clock offsets, not from anything derived here."""
-    assert not clock_needs_fitting("noaa14")
-
-
-def test_a_pod_platform_without_a_clock_table_is_fitted():
-    """noaa10 holds no table at all, and its passes sit about a second along their track."""
-    assert clock_needs_fitting("noaa10")
-
-
-def test_the_disciplined_clocks_are_taken_at_their_word():
-    """KLM and Metop hold their time to within a scanline across the whole sample."""
-    assert not clock_needs_fitting("noaa19")
-    assert not clock_needs_fitting("metopb")
-
-
 def test_the_poes_platforms_fly_without_turning():
     """NOAA POES holds a fixed attitude, so its scan follows the inertial track."""
     assert not yaw_steers("noaa19")
@@ -2080,11 +2010,6 @@ def test_a_steered_platform_is_navigated_differently(pod_file_with_tbm_header, p
     turned, _ = lonlats_flying_as("metopa")
 
     assert np.abs(turned - straight).max() > 0.1
-
-
-def test_the_pod_platforms_with_a_trusted_clock_table_are_not_fitted_either():
-    """Where pygac corrects the clock from measurement, what is left is a scanline or less."""
-    assert not clock_needs_fitting("noaa9")
 
 
 def test_the_geolocation_names_its_nadir_convention(pod_file_with_tbm_header, pod_tle):

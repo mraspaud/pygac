@@ -171,21 +171,6 @@ def has_a_trusted_clock(spacecraft_name):
     return spacecraft_name in PLATFORMS_WITH_A_TRUSTED_CLOCK
 
 
-#: The first NOAA platform of the KLM series, whose clock is updated daily. Everything
-#: numbered below it belongs to the POD series, whose clock drifts between resets.
-FIRST_DISCIPLINED_NOAA = 15
-
-#: POD platforms whose drift pygac takes out from a table of measured clock errors that
-#: is trusted. On these the correction leaves a scanline or less: it turns +1.35 s into
-#: -0.09 s on noaa9, and what remains matches the KLM and Metop noise floor.
-#:
-#: noaa14 belongs here on provenance: its table came from published clock offsets, as
-#: did noaa7's, noaa9's and noaa11's, while noaa12's was fitted to imagery for the ESA
-#: Cloud_cci AVHRR GAC record. On a platform in this set, whatever its table still
-#: leaves is taken up by the pitch rather than reported as a time offset. The platforms
-#: absent from this set hold no table at all and must be fitted.
-POD_WITH_A_TRUSTED_CLOCK = frozenset({"noaa7", "noaa9", "noaa11", "noaa12", "noaa14"})
-
 #: The scan steps 0.05409868099 degrees between samples, so the outermost of the 2048
 #: puts its centre at 0.05409868099 * 1023.5 degrees from nadir (KLM Guide, Appendix J).
 NOMINAL_MAX_SCAN_ANGLE = 55.37
@@ -210,43 +195,9 @@ def max_scan_angle_for(spacecraft_name):
     return MAX_SCAN_ANGLES.get(spacecraft_name, NOMINAL_MAX_SCAN_ANGLE)
 
 
-#: How far along its own track a pass may sit before its platform's clock stops being
-#: worth believing, in seconds. One LAC scanline is a sixth of a second, and across the
-#: sample no disciplined platform leaves one: Metop reaches 0.16 s, KLM 0.17 s, noaa9
-#: 0.16 s. Three scanlines therefore refuses nothing we have seen, while holding the
-#: pitch a pass may absorb to a quarter of a degree instead of nearly a whole one.
-A_TRUSTED_CLOCK_HOLDS_WITHIN_S = 0.5
-
-
-def should_fit_the_clock(spacecraft_name, along_track_seconds, when=None):
+def should_fit_the_clock(spacecraft_name):
     """Say whether to fit a time offset for this pass."""
-    if clock_needs_fitting(spacecraft_name):
-        return True
-    if (when is not None and spacecraft_name in POD_WITH_A_TRUSTED_CLOCK
-            and not clock_table_covers(spacecraft_name, when)):
-        return True
-    if abs(along_track_seconds) > A_TRUSTED_CLOCK_HOLDS_WITHIN_S:
-        warnings.warn(
-            f"{spacecraft_name} holds a disciplined clock, but this pass sits "
-            f"{along_track_seconds:+.2f} s along its own track; its time is being fitted "
-            f"rather than taken at zero",
-            RuntimeWarning, stacklevel=2)
-        return True
-    return False
-
-
-def clock_needs_fitting(spacecraft_name):
-    """Say whether *spacecraft_name* drifts enough in time to be worth fitting.
-
-    Fitting a time offset already known to be zero only lets the pitch absorb its
-    noise, since a shift along the track can be written as either. Platforms are
-    spared the fit where their clock is disciplined in flight, or where it is
-    corrected afterwards from a table worth believing.
-    """
-    if spacecraft_name.startswith("metop") or spacecraft_name in POD_WITH_A_TRUSTED_CLOCK:
-        return False
-    numbered = spacecraft_name.removeprefix("noaa")
-    return not (numbered.isdigit() and int(numbered) >= FIRST_DISCIPLINED_NOAA)
+    return not has_a_trusted_clock(spacecraft_name)
 
 
 def _reject_a_fit_resting_on(bound, fitted, what):
@@ -1080,7 +1031,7 @@ class Reader(ABC):
             calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem)
         time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = fit_navigation(
             calibrated_ds, gcps, gcp_lonlats,
-            should_fit_the_clock(self.spacecraft_name, along_track_seconds, when),
+            should_fit_the_clock(self.spacecraft_name),
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
             time_offset_guess=along_track_seconds,
