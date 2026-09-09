@@ -1437,13 +1437,16 @@ def test_failed_pre_alignment_does_not_abandon_georeferencing(pod_file_with_tbm_
     assert dataset.attrs["median_gcp_distance"] == 1000
 
 
-def test_estimated_attitude_is_labelled_in_the_unit_it_holds(pod_file_with_tbm_header, pod_tle,
-                                                              monkeypatch):
-    """The fitted attitude is in radians; the attribute used to say degrees.
+def test_estimated_attitude_is_published_in_degrees(pod_file_with_tbm_header, pod_tle,
+                                                    monkeypatch):
+    """The fitted attitude reaches the product in degrees.
 
-    pyorbital returns the minimiser's own variables, bounded at +-0.5 rad, and
-    pygac stored them unconverted under a name claiming degrees. Anything
-    screening on that field was reading a number 57 times too small.
+    pyorbital returns the minimiser's own variables in radians, and pygac once
+    stored them unconverted under a name claiming degrees, so anything screening
+    on that field read a number 57 times too small. The name was corrected
+    first; the unit is corrected here, because degrees is what the attitude is
+    quoted in everywhere it is compared -- the OSPO notices, the published
+    platform constants, and the analysis document.
     """
     def skip_thermal(channels, *args, **kwargs):
         return channels, []
@@ -1460,9 +1463,9 @@ def test_estimated_attitude_is_labelled_in_the_unit_it_holds(pod_file_with_tbm_h
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
     reader.read(pod_file_with_tbm_header)
     dataset = reader.get_calibrated_dataset()
-    assert dataset.attrs["estimated_attitude_in_radians"] == attitude
-    assert "estimated_attitude_in_degrees" not in dataset.attrs
-    assert dataset.attrs["navigation_metadata_schema_version"] >= 2
+    assert dataset.attrs["estimated_attitude_in_degrees"] == pytest.approx(np.rad2deg(attitude))
+    assert "estimated_attitude_in_radians" not in dataset.attrs
+    assert dataset.attrs["navigation_metadata_schema_version"] >= 3
 
 
 def test_georeferencing_rejects_too_few_gcps(pod_file_with_tbm_header, pod_tle, monkeypatch):

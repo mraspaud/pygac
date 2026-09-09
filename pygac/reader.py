@@ -98,7 +98,9 @@ MAX_UNEXPLAINED_DISPLACEMENT_PX = 8.0
 #: Version of the navigation metadata written into the calibrated dataset.
 #: 2 renamed ``estimated_attitude_in_degrees`` to ``estimated_attitude_in_radians``
 #: (the value was always radians) and added ``gcp_count``.
-NAVIGATION_METADATA_SCHEMA_VERSION = 2
+#: 3 restored that name and converted the value, so the attitude is now in the
+#: degrees the name has always claimed.
+NAVIGATION_METADATA_SCHEMA_VERSION = 3
 
 # rpy values from
 # here:http://yyy.rsmas.miami.edu/groups/rrsl/pathfinder/Processing/proc_app_a.html
@@ -1087,18 +1089,27 @@ class Reader(ABC):
         self._times_as_np_datetime64 += time_diff
         calibrated_ds["longitude"].data = lons
         calibrated_ds["latitude"].data = lats
-        # These are the minimiser's own variables, which pyorbital bounds in radians.
-        # They were previously stored under a name claiming degrees; the schema
-        # version distinguishes products written before and after the correction.
-        calibrated_ds.attrs["estimated_attitude_in_radians"] = roll, pitch, yaw
-        calibrated_ds.attrs["navigation_metadata_schema_version"] = NAVIGATION_METADATA_SCHEMA_VERSION
-        calibrated_ds.attrs["estimated_time_offset_in_seconds"] = time_diff_s + preliminary_time_diff_s
+        self._record_how_the_navigation_was_fitted(
+            calibrated_ds, (roll, pitch, yaw), time_diff_s + preliminary_time_diff_s
+        )
 
         if self.dem:
             from georeferencer.georeferencer import orthocorrection
 
             calibrated_ds = orthocorrection(calibrated_ds, sat_zen, self.dem)
         calibrated_ds["times"].data = self._times_as_np_datetime64
+
+    def _record_how_the_navigation_was_fitted(self, calibrated_ds, attitude_in_radians,
+                                              time_offset_in_seconds):
+        """State on the product what the fit had to change to make the navigation agree.
+
+        pyorbital carries the attitude in radians because that is the unit its
+        minimiser bounds. The product quotes degrees, which is the unit every
+        source the attitude is compared against uses.
+        """
+        calibrated_ds.attrs["estimated_attitude_in_degrees"] = tuple(np.rad2deg(attitude_in_radians))
+        calibrated_ds.attrs["estimated_time_offset_in_seconds"] = time_offset_in_seconds
+        calibrated_ds.attrs["navigation_metadata_schema_version"] = NAVIGATION_METADATA_SCHEMA_VERSION
 
     def _reject_an_incoherent_displacement_field(self, calibrated_ds):
         """Refuse matches that agree with no geometry.
