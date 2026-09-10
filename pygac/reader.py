@@ -61,6 +61,16 @@ LOG = logging.getLogger(__name__)
 #: same nadir as the navigation it corrects.
 NADIR_CONVENTION = "geodetic"
 
+#: The order the platform's roll, pitch and yaw are applied in when the geolocation is
+#: computed.
+#:
+#: pyorbital still defaults to the order it shipped with, so that products made with
+#: earlier versions stay reproducible, but its own validation against reference
+#: geolocation shows that order is the less accurate one -- worth up to 2.7 km once a
+#: pitch bias is involved, which is several times this record's whole budget. A record
+#: that wants the corrected computation has to ask for it by name.
+ROTATION_ORDER = "pitch_first"
+
 #: How closely a pixel must track the one beside it along the scan for the frame to hold
 #: an image at all. Measured across the sample, every pass that registers lies between
 #: 0.89 and 0.99, while three NOAA-8 passes carrying only noise lie at -0.01 to 0.00.
@@ -215,6 +225,23 @@ NOMINAL_MAX_SCAN_ANGLE = 55.37
 #: consulted first, so an operator retunes a platform without editing this table. A
 #: platform named in neither is navigated at the nominal angle.
 MAX_SCAN_ANGLES = {"noaa16": 55.25}
+
+
+def seconds_from_scanlines(lines, times):
+    """Return the along-track displacement of *lines* scan lines, expressed in seconds.
+
+    Scan lines arrive at a fixed rate, so a count of them can be written as a duration.
+    That is a change of units and nothing more: a swath sitting along its own track may
+    be doing so because its clock is wrong, because the elements it was navigated from
+    put it in the wrong place, or because the platform is pitched. All three displace it
+    the same way, and only the curvature across the swath tells them apart.
+
+    The conversion lives here rather than in the georeferencer because the scan rate is
+    a fact about the instrument. The georeferencer reports what it measured -- a count
+    of lines -- and makes no claim about what that count means.
+    """
+    seconds_per_line = np.diff(times).mean() / np.timedelta64(1, "s")
+    return float(lines * seconds_per_line)
 
 
 def max_scan_angle_for(spacecraft_name):
@@ -1068,18 +1095,27 @@ class Reader(ABC):
             else:
                 calibrated_ds.attrs["pre_alignment_applied"] = True
 
-        from georeferencer.georeferencer import fit_navigation, measure_swath_displacement
+        from georeferencer.georeferencer import measure_swath_displacement
+        from pyorbital.geoloc_avhrr import estimate_time_and_attitude_deviations
 
         _, sat_zen, _, sun_zen, _ = self.get_angles()
         when = self.get_times()[0]
-        gcps, gcp_lonlats, along_track_seconds = measure_swath_displacement(
+        # The georeferencer only measures. It reports where the swath sits, including
+        # the coarse pass's reach along the track, and this decides what that means.
+        gcps, gcp_lonlats, along_track_lines = measure_swath_displacement(
             calibrated_ds, sun_zen, sat_zen, self.reference_image, self.dem)
-        time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = fit_navigation(
-            calibrated_ds, gcps, gcp_lonlats,
-            should_fit_the_clock(self.spacecraft_name),
+        along_track_seconds = seconds_from_scanlines(along_track_lines,
+                                                    calibrated_ds["times"].values)
+        time_diff_s, (roll, pitch, yaw), (odistances, mdistances) = estimate_time_and_attitude_deviations(
+            gcps, gcp_lonlats[:, 0], gcp_lonlats[:, 1],
+            calibrated_ds["times"][0].values,
+            calibrated_ds.attrs["tle"],
+            calibrated_ds.attrs["max_scan_angle"],
             yaw_steering=yaw_steers(self.spacecraft_name),
             nadir_convention=NADIR_CONVENTION,
+            rotation_order=ROTATION_ORDER,
             time_offset_guess=along_track_seconds,
+            solve_for_time=should_fit_the_clock(self.spacecraft_name),
         )
 
         calibrated_ds.attrs["clock_table_covers_the_pass"] = bool(
@@ -1909,7 +1945,8 @@ class Reader(ABC):
         LOG.debug(f"Computing lon/lats with attitude {rpy}")
         pixels_pos = compute_pixels((tle1, tle2), sgeom, s_times, rpy,
                                     yaw_steering=yaw_steers(self.spacecraft_name),
-                                    nadir_convention=NADIR_CONVENTION)
+                                    nadir_convention=NADIR_CONVENTION,
+                                    rotation_order=ROTATION_ORDER)
         pos_time = get_lonlatalt(pixels_pos, s_times)
 
         lons, lats = pos_time[:2]

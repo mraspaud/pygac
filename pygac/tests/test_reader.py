@@ -45,6 +45,7 @@ from pygac.reader import (
     frame_buffer_lag_for,
     has_a_trusted_clock,
     max_scan_angle_for,
+    seconds_from_scanlines,
     should_fit_the_clock,
     yaw_steers,
 )
@@ -1224,11 +1225,12 @@ def use_a_stub_georeferencer(monkeypatch, stub):
         measures.answer = stub(calibrated_ds, *args, **rest)
         return np.zeros((60, 2)), np.zeros((60, 2)), 0.0
 
-    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
+    def fits(gcps, ref_lons, ref_lats, start_time, tle, max_scan_angle, **rest):
         return measures.answer
 
+    from pyorbital import geoloc_avhrr
     monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures)
-    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
+    monkeypatch.setattr(geoloc_avhrr, "estimate_time_and_attitude_deviations", fits)
 
 
 def record_a_coherent_field(calibrated_ds, count=60):
@@ -1899,6 +1901,20 @@ def test_only_metop_is_credited_with_a_trusted_clock():
     assert not has_a_trusted_clock("noaa10")
 
 
+def test_a_shift_of_scanlines_is_read_as_a_duration():
+    """The georeferencer counts scanlines; only pygac knows how fast they arrive.
+
+    Turning a count of lines into a duration needs the scan rate, which is a fact
+    about the instrument. Keeping that conversion here leaves the georeferencer
+    free of any assumption about what it is looking at, so it can be pointed at
+    GAC or at another instrument without change.
+    """
+    six_per_second = np.timedelta64(166667, "us")
+    times = np.datetime64("1997-11-09T19:00:00") + np.arange(100) * six_per_second
+
+    assert seconds_from_scanlines(163, times) == pytest.approx(27.17, abs=0.01)
+
+
 def test_the_early_klm_frame_buffer_lag_is_dated_and_per_platform():
     """NOAA-15 and NOAA-16 stamped buffered scanlines with the time of readout.
 
@@ -1953,12 +1969,13 @@ def test_a_pass_past_its_platform_table_is_fitted_end_to_end(pod_file_with_tbm_h
         record_a_coherent_field(calibrated_ds)
         return np.zeros((60, 2)), np.zeros((60, 2)), 0.0
 
-    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
+    def fits(gcps, ref_lons, ref_lats, start_time, tle, max_scan_angle, solve_for_time=True, **rest):
         return (fitted if solve_for_time else 0.0), (0, 0, 0), ([10000] * 60, [1000] * 60)
 
     from georeferencer import georeferencer
+    from pyorbital import geoloc_avhrr
     monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures_no_drift)
-    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
+    monkeypatch.setattr(geoloc_avhrr, "estimate_time_and_attitude_deviations", fits)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
     reader.read(pod_file_with_tbm_header)
@@ -1982,12 +1999,13 @@ def test_a_pass_records_whether_a_clock_measurement_reached_it(pod_file_with_tbm
         record_a_coherent_field(calibrated_ds)
         return np.zeros((60, 2)), np.zeros((60, 2)), 0.0
 
-    def fits(calibrated_ds, gcps, gcp_lonlats, solve_for_time, **rest):
+    def fits(gcps, ref_lons, ref_lats, start_time, tle, max_scan_angle, **rest):
         return 0.0, (0, 0, 0), ([10000] * 60, [1000] * 60)
 
     from georeferencer import georeferencer
+    from pyorbital import geoloc_avhrr
     monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures_no_drift)
-    monkeypatch.setattr(georeferencer, "fit_navigation", fits)
+    monkeypatch.setattr(geoloc_avhrr, "estimate_time_and_attitude_deviations", fits)
     reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
                           compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
     reader.read(pod_file_with_tbm_header)
@@ -2051,6 +2069,29 @@ def test_a_steered_platform_is_navigated_differently(pod_file_with_tbm_header, p
     turned, _ = lonlats_flying_as("metopa")
 
     assert np.abs(turned - straight).max() > 0.1
+
+
+def test_the_geolocation_names_its_rotation_order(pod_file_with_tbm_header, pod_tle):
+    """The geolocation chooses an order rather than falling back to the legacy one.
+
+    pyorbital says so itself: asked to apply an attitude without being told which order
+    to apply it in, it warns that it is using the order it shipped with, which its own
+    validation shows is the less accurate one. It stays quiet when the platform is not
+    pitched, because the two orders are then identical, so the platform has to be
+    pitched for the question to arise at all.
+    """
+    import warnings as warnings_module
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True)
+    reader.read(pod_file_with_tbm_header)
+    reader._rpy = np.array([0.0, 0.01, 0.0])
+
+    with warnings_module.catch_warnings(record=True) as caught:
+        warnings_module.simplefilter("always")
+        reader.get_lonlat()
+
+    assert not [one for one in caught if "rotation order" in str(one.message)]
 
 
 def test_the_geolocation_names_its_nadir_convention(pod_file_with_tbm_header, pod_tle):
