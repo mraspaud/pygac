@@ -690,7 +690,13 @@ class Reader(ABC):
                 self._times_as_np_datetime64 = self.correct_times_thresh()
             except TimestampMismatch as err:
                 LOG.error(str(err))
+            self._times_as_np_datetime64 += self._buffered_frames_the_file_did_not_count()
         return self._times_as_np_datetime64
+
+    def _buffered_frames_the_file_did_not_count(self):
+        """Give the time this platform reported its scanlines early, as a duration."""
+        early = frame_buffer_delay_for(self.spacecraft_name, self._times_as_np_datetime64[0])
+        return np.timedelta64(int(early * 1e9), "ns")
 
 
     @staticmethod

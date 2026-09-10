@@ -199,6 +199,32 @@ class TestLACKLM:
         assert np.all(np.isnan(channels[:, :, 3]))
 
 
+def test_an_early_noaa15_pass_is_dated_later_than_the_same_pass_from_noaa17():
+    """The buffered frames are taken out of the reported time, and only where they were.
+
+    NOAA-15 and NOAA-16 named a frame they had already taken, 900 ms early. The
+    same scanlines read as any other platform keep the time the file states, so
+    the difference between the two is the whole of the correction.
+    """
+    def times_read_as(platform):
+        reader = GACKLMReader()
+        reader.spacecraft_name = platform
+        reader.head = {"start_of_data_set_year": np.int64(2001),
+                       "start_of_data_set_day_of_year": np.int64(152),
+                       "start_of_data_set_utc_time_of_day": np.int64(43200000)}
+        reader.scans = {"scan_line_number": np.array([1, 2]),
+                        "scan_line_year": np.array([2001, 2001]),
+                        "scan_line_day_of_year": np.array([152, 152]),
+                        "scan_line_utc_time_of_day": np.array([43200000, 43200500])}
+        return reader.get_times()
+
+    corrected = times_read_as("noaa15")
+    untouched = times_read_as("noaa17")
+
+    shift = (corrected - untouched) / np.timedelta64(1, "s")
+    numpy.testing.assert_allclose(shift, 0.9)
+
+
 def test_gac_scanline_dtype():
     """Test the gac scanline size."""
     from pygac.gac_klm import scanline
