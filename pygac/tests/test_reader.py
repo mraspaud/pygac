@@ -1440,6 +1440,36 @@ def test_failed_pre_alignment_does_not_abandon_georeferencing(pod_file_with_tbm_
     assert dataset.attrs["median_gcp_distance"] == 1000
 
 
+def test_the_navigation_travels_as_one_record(pod_file_with_tbm_header, pod_tle, monkeypatch):
+    """Everything the fit settled is gathered under a single attribute.
+
+    Each hop between here and the delivered file forwards attributes by name, and
+    each keeps its own list of the names it knows. A loose name therefore has to be
+    added to every list along the way, and a renamed one is dropped in silence --
+    which is how the fitted attitude came to be missing from every product. One name
+    that never changes cannot go missing that way, and the mapping under it can grow
+    without any hop being told.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    attitude = (0.001, -0.002, 0.003)   # radians, as pyorbital returns them
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return 0, attitude, ([10000] * 60, [1000] * 60)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["navigation"]["attitude_in_degrees"] == pytest.approx(np.rad2deg(attitude))
+
+
 def test_estimated_attitude_is_published_in_degrees(pod_file_with_tbm_header, pod_tle,
                                                     monkeypatch):
     """The fitted attitude reaches the product in degrees.

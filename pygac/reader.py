@@ -1165,6 +1165,9 @@ class Reader(ABC):
         calibrated_ds.attrs["estimated_attitude_in_degrees"] = tuple(np.rad2deg(attitude_in_radians))
         calibrated_ds.attrs["estimated_time_offset_in_seconds"] = time_offset_in_seconds
         calibrated_ds.attrs["navigation_metadata_schema_version"] = NAVIGATION_METADATA_SCHEMA_VERSION
+        calibrated_ds.attrs["navigation"] = {
+            "attitude_in_degrees": tuple(np.rad2deg(attitude_in_radians)),
+        }
 
     def _reject_an_incoherent_displacement_field(self, calibrated_ds):
         """Refuse matches that agree with no geometry.
