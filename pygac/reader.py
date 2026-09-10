@@ -1182,6 +1182,7 @@ class Reader(ABC):
         calibrated_ds.attrs["navigation"] = {
             "attitude_in_degrees": tuple(np.rad2deg(attitude_in_radians)),
             "time_offset_in_seconds": time_offset_in_seconds,
+            "schema_version": NAVIGATION_METADATA_SCHEMA_VERSION,
         }
 
     def _reject_an_incoherent_displacement_field(self, calibrated_ds):

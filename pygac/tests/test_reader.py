@@ -41,6 +41,7 @@ from pygac.pod_reader import POD_QualityIndicator, header3
 from pygac.pod_reader import tbm_header as tbm_header_dtype
 from pygac.reader import (
     MAX_SCAN_ANGLES,
+    NAVIGATION_METADATA_SCHEMA_VERSION,
     NoTLEData,
     frame_buffer_lag_for,
     has_a_trusted_clock,
@@ -1469,6 +1470,33 @@ def test_the_navigation_travels_as_one_record(pod_file_with_tbm_header, pod_tle,
     dataset = reader.get_calibrated_dataset()
 
     assert dataset.attrs["navigation"]["attitude_in_degrees"] == pytest.approx(np.rad2deg(attitude))
+
+
+def test_the_navigation_record_says_which_version_of_itself_it_is(pod_file_with_tbm_header,
+                                                                 pod_tle, monkeypatch):
+    """A consumer has to be able to tell what the record it is holding contains.
+
+    The set of things recorded here has changed before and will change again, and a
+    reader of an old product cannot ask the code that wrote it. The version travels
+    inside the record rather than beside it, so that it cannot be separated from
+    what it describes on the way to the file.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return 0, (0.001, 0.0, 0.003), ([10000] * 60, [1000] * 60)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["navigation"]["schema_version"] == NAVIGATION_METADATA_SCHEMA_VERSION
 
 
 def test_the_navigation_record_carries_the_time_the_fit_settled(pod_file_with_tbm_header,
