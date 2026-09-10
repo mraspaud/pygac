@@ -257,6 +257,19 @@ def should_fit_the_clock(spacecraft_name):
     return not has_a_trusted_clock(spacecraft_name)
 
 
+def should_fit_the_pitch(spacecraft_name):
+    """Say whether to fit a pitch for this pass.
+
+    Never alongside the time. A shift along the track can be written as either, at
+    about 2.25 seconds per degree, and only the curvature it leaves across the swath
+    tells them apart -- which a single pass rarely constrains. Fitting both divides
+    the shift between them arbitrarily and reports two numbers where the data
+    supports one, so the platform decides which of the two is believed and the other
+    is held at zero.
+    """
+    return has_a_trusted_clock(spacecraft_name)
+
+
 def _reject_a_fit_resting_on(bound, fitted, what):
     """Refuse a fit whose *fitted* value has run to *bound*.
 
@@ -1116,6 +1129,7 @@ class Reader(ABC):
             rotation_order=ROTATION_ORDER,
             time_offset_guess=along_track_seconds,
             solve_for_time=should_fit_the_clock(self.spacecraft_name),
+            solve_for_pitch=should_fit_the_pitch(self.spacecraft_name),
         )
 
         calibrated_ds.attrs["clock_table_covers_the_pass"] = bool(

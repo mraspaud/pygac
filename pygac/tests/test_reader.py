@@ -47,6 +47,7 @@ from pygac.reader import (
     max_scan_angle_for,
     seconds_from_scanlines,
     should_fit_the_clock,
+    should_fit_the_pitch,
     yaw_steers,
 )
 
@@ -1967,6 +1968,57 @@ def test_the_early_klm_frame_buffer_lag_is_dated_and_per_platform():
     assert frame_buffer_lag_for("noaa16", after) == 0.0
     assert frame_buffer_lag_for("noaa17", before) == 0.0
     assert frame_buffer_lag_for("noaa14", before) == 0.0
+
+
+def test_a_drifting_platform_has_its_pitch_held_while_its_time_is_fitted(
+        pod_file_with_tbm_header, pod_tle, monkeypatch):
+    """The policy has to reach the fit, not merely be stated beside it.
+
+    noaa14's clock is not believed, so its time is fitted and its pitch is the one
+    held at zero. A fit told to solve for both would hand back a pitch invented out
+    of the same displacement the time already accounts for.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    asked = {}
+
+    def measures_no_drift(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return np.zeros((60, 2)), np.zeros((60, 2)), 0.0
+
+    def fits(gcps, ref_lons, ref_lats, start_time, tle, max_scan_angle, **rest):
+        asked.update(rest)
+        return 0.0, (0, 0, 0), ([10000] * 60, [1000] * 60)
+
+    from georeferencer import georeferencer
+    from pyorbital import geoloc_avhrr
+    monkeypatch.setattr(georeferencer, "measure_swath_displacement", measures_no_drift)
+    monkeypatch.setattr(geoloc_avhrr, "estimate_time_and_attitude_deviations", fits)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    reader.spacecraft_name = "noaa14"
+    reader.get_calibrated_dataset()
+
+    assert asked["solve_for_time"] is True
+    assert asked["solve_for_pitch"] is False
+
+
+def test_exactly_one_of_the_time_and_the_pitch_is_ever_fitted():
+    """The two say the same thing about a pass, so fitting both leaves both meaningless.
+
+    A shift along the track can be written as a clock error or as a pitch, and they
+    exchange at about 2.25 seconds per degree. Only the curvature the shift leaves
+    across the swath separates them, which a single pass rarely constrains, so a fit
+    given both will divide the shift between them arbitrarily and report two numbers
+    where the data supports one. Whichever is not fitted is held at zero.
+    """
+    for platform in ("metopa", "metopb", "metopc", "noaa19", "noaa16", "noaa14", "noaa10", "noaa7"):
+        assert should_fit_the_clock(platform) != should_fit_the_pitch(platform)
 
 
 def test_whether_to_fit_the_clock_is_settled_by_the_platform_alone():
