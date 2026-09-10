@@ -1839,6 +1839,22 @@ def test_the_recorded_scan_angle_is_the_one_its_platform_scans(pod_file_with_tbm
     assert reader.create_counts_dataset().attrs["max_scan_angle"] == 55.245
 
 
+def test_the_dataset_carries_the_times_as_the_file_stated_them(pod_file_with_tbm_header, pod_tle):
+    """A user of the product must be able to undo what pygac did to the timestamps.
+
+    The scanline times are moved by the buffered-frame correction, by the clock
+    drift adjustment and by the navigation fit, all in place. The product
+    therefore carries what the file said as well as what pygac made of it.
+    """
+    reader = LACPODReader(interpolate_coords=True, tle_dir=pod_tle.parent, tle_name=pod_tle.name)
+    reader.read(pod_file_with_tbm_header)
+
+    dataset = reader.create_counts_dataset()
+
+    numpy.testing.assert_array_equal(dataset["times_as_the_file_stated_them"],
+                                     reader.times_as_the_file_stated_them)
+
+
 def test_noaa16_records_the_angle_it_is_navigated_at(pod_file_with_tbm_header, pod_tle):
     """Its fit was handed a swath 0.12 degrees narrower than the one its navigation drew."""
     reader = LACPODReader(interpolate_coords=True, tle_dir=pod_tle.parent, tle_name=pod_tle.name)

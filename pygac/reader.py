@@ -817,6 +817,8 @@ class Reader(ABC):
                 channel_name=channel_names,
                 columns=columns,
                 times=("scan_line_index", times),
+                times_as_the_file_stated_them=("scan_line_index",
+                                               self.times_as_the_file_stated_them),
             ),
         )
 
