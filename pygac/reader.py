@@ -171,6 +171,30 @@ def has_a_trusted_clock(spacecraft_name):
     return spacecraft_name in PLATFORMS_WITH_A_TRUSTED_CLOCK
 
 
+#: How long NOAA-15 and NOAA-16 reported their scanlines early, in seconds, and the
+#: moment NOAA corrected it.
+#:
+#: The onboard software buffered eleven frames where five were assumed. At 150 ms a
+#: frame that is 900 ms, and the timestamp named a frame the instrument had already
+#: taken. NOAA fixed it on 2001-08-07 at 23:59Z; their own operational adjustment was
+#: a round second, but the reported time was out by the 0.9 s the buffering explains.
+#:
+#: This is a fault in what the platform reported, attested outside this record, so it
+#: is applied by date rather than fitted from imagery.
+EARLY_KLM_FRAME_BUFFER_DELAY_S = 0.9
+EARLY_KLM_FRAME_BUFFER_FIXED_AT = np.datetime64("2001-08-07T23:59:00")
+PLATFORMS_WITH_THE_EARLY_KLM_FRAME_BUFFER = ("noaa15", "noaa16")
+
+
+def frame_buffer_delay_for(spacecraft_name, when):
+    """Give the seconds *spacecraft_name* reported its scanlines early at *when*."""
+    if spacecraft_name not in PLATFORMS_WITH_THE_EARLY_KLM_FRAME_BUFFER:
+        return 0.0
+    if np.datetime64(when) >= EARLY_KLM_FRAME_BUFFER_FIXED_AT:
+        return 0.0
+    return EARLY_KLM_FRAME_BUFFER_DELAY_S
+
+
 #: The scan steps 0.05409868099 degrees between samples, so the outermost of the 2048
 #: puts its centre at 0.05409868099 * 1023.5 degrees from nadir (KLM Guide, Appendix J).
 NOMINAL_MAX_SCAN_ANGLE = 55.37
