@@ -2198,6 +2198,26 @@ def test_a_scan_angle_named_in_the_configuration_is_used(tmp_path):
         reset_config()
 
 
+def test_a_scan_angle_is_read_from_the_named_configuration_file(tmp_path, monkeypatch):
+    """A caller that drives the reader directly still gets the configured angle.
+
+    Naming the file in ``PYGAC_CONFIG_FILE`` is how pygac has always been pointed at
+    its settings, and it is the only handle a runner embedding the reader has. Only
+    pygac's own command-line runner ever opened that file, so everything else -- the
+    FDR chain among them -- was quietly navigated at the built-in angle while a
+    configured one sat unread beside it.
+    """
+    from pygac.configuration import reset_config
+    settings = tmp_path / "pygac.cfg"
+    settings.write_text("[scan_angles]\nnoaa19 = 55.301\n")
+    monkeypatch.setenv("PYGAC_CONFIG_FILE", str(settings))
+    reset_config()
+    try:
+        assert max_scan_angle_for("noaa19") == 55.301
+    finally:
+        reset_config()
+
+
 def test_a_clock_named_in_the_configuration_is_believed_or_not(tmp_path):
     """A platform shown to hold its time is promoted without editing pygac.
 

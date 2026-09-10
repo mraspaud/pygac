@@ -244,9 +244,24 @@ def seconds_from_scanlines(lines, times):
     return float(lines * seconds_per_line)
 
 
+def _settings_the_operator_named():
+    """Return the configuration, opening the file named in the environment if need be.
+
+    ``get_config(initialized=False)`` hands back whatever has already been loaded and
+    opens nothing, so a setting only reached a run if something else had read the file
+    first. pygac's own command-line runner does; a caller embedding the reader does
+    not, and the whole FDR chain is such a caller. A configured platform was therefore
+    accepted, ignored, and never complained about.
+    """
+    settings = get_config(initialized=False)
+    if not settings.sections() and "PYGAC_CONFIG_FILE" in os.environ:
+        settings.read(os.environ["PYGAC_CONFIG_FILE"])
+    return settings
+
+
 def max_scan_angle_for(spacecraft_name):
     """Give the half-swath angle *spacecraft_name* scans."""
-    settings = get_config(initialized=False)
+    settings = _settings_the_operator_named()
     if settings.has_option("scan_angles", spacecraft_name):
         return settings.getfloat("scan_angles", spacecraft_name)
     return MAX_SCAN_ANGLES.get(spacecraft_name, NOMINAL_MAX_SCAN_ANGLE)
