@@ -1471,6 +1471,34 @@ def test_the_navigation_travels_as_one_record(pod_file_with_tbm_header, pod_tle,
     assert dataset.attrs["navigation"]["attitude_in_degrees"] == pytest.approx(np.rad2deg(attitude))
 
 
+def test_the_navigation_record_carries_the_time_the_fit_settled(pod_file_with_tbm_header,
+                                                                pod_tle, monkeypatch):
+    """The time offset belongs with the attitude, under the one name that travels.
+
+    It is half of the same answer: the fit divides an along-track displacement
+    between a time and a pitch, and a consumer reading one without the other cannot
+    tell which was fitted and which was held.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    fitted = 1.75
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return fitted, (0.001, 0.0, 0.003), ([10000] * 60, [1000] * 60)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif")
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["navigation"]["time_offset_in_seconds"] == pytest.approx(fitted)
+
+
 def test_estimated_attitude_is_published_in_degrees(pod_file_with_tbm_header, pod_tle,
                                                     monkeypatch):
     """The fitted attitude reaches the product in degrees.
