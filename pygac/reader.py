@@ -333,6 +333,7 @@ class Reader(ABC):
         self.spacecraft_name = None
         self.spacecraft_id = None
         self._times_as_np_datetime64 = None
+        self._times_as_the_file_stated_them = None
         self.lats = None
         self.lons = None
         self.tle_lines = None
@@ -690,8 +691,14 @@ class Reader(ABC):
                 self._times_as_np_datetime64 = self.correct_times_thresh()
             except TimestampMismatch as err:
                 LOG.error(str(err))
+            self._times_as_the_file_stated_them = self._times_as_np_datetime64.copy()
             self._times_as_np_datetime64 += self._buffered_frames_the_file_did_not_count()
         return self._times_as_np_datetime64
+
+    @property
+    def times_as_the_file_stated_them(self):
+        """Give the scanline times as decoded, before any correction moved them."""
+        return self._times_as_the_file_stated_them
 
     def _buffered_frames_the_file_did_not_count(self):
         """Give the time this platform reported its scanlines early, as a duration."""

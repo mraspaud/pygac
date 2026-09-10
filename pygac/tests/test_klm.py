@@ -225,6 +225,31 @@ def test_an_early_noaa15_pass_is_dated_later_than_the_same_pass_from_noaa17():
     numpy.testing.assert_allclose(shift, 0.9)
 
 
+def test_the_times_as_the_file_stated_them_are_kept():
+    """Every correction pygac makes to the timestamps must remain reversible.
+
+    The scanline times are corrected in place -- for the buffered frames, for
+    clock drift, and again by whatever the navigation fit settles on -- so
+    without a copy of what the file actually said, a user cannot undo any of it
+    or tell how far it was moved.
+    """
+    reader = GACKLMReader()
+    reader.spacecraft_name = "noaa15"
+    reader.head = {"start_of_data_set_year": np.int64(2001),
+                   "start_of_data_set_day_of_year": np.int64(152),
+                   "start_of_data_set_utc_time_of_day": np.int64(43200000)}
+    reader.scans = {"scan_line_number": np.array([1, 2]),
+                    "scan_line_year": np.array([2001, 2001]),
+                    "scan_line_day_of_year": np.array([152, 152]),
+                    "scan_line_utc_time_of_day": np.array([43200000, 43200500])}
+
+    corrected = reader.get_times()
+    stated = reader.times_as_the_file_stated_them
+
+    moved = (corrected - stated) / np.timedelta64(1, "s")
+    numpy.testing.assert_allclose(moved, 0.9)
+
+
 def test_gac_scanline_dtype():
     """Test the gac scanline size."""
     from pygac.gac_klm import scanline
