@@ -42,7 +42,7 @@ from pygac.pod_reader import tbm_header as tbm_header_dtype
 from pygac.reader import (
     MAX_SCAN_ANGLES,
     NoTLEData,
-    frame_buffer_delay_for,
+    frame_buffer_lag_for,
     has_a_trusted_clock,
     max_scan_angle_for,
     should_fit_the_clock,
@@ -1899,23 +1899,28 @@ def test_only_metop_is_credited_with_a_trusted_clock():
     assert not has_a_trusted_clock("noaa10")
 
 
-def test_the_early_klm_frame_buffer_delay_is_dated_and_per_platform():
-    """NOAA-15 and NOAA-16 timestamped a frame they had already buffered.
+def test_the_early_klm_frame_buffer_lag_is_dated_and_per_platform():
+    """NOAA-15 and NOAA-16 stamped buffered scanlines with the time of readout.
 
-    The onboard software held eleven frames where five were assumed, and at
-    150 ms a frame the reported time ran 900 ms early. NOAA corrected it on
-    2001-08-07 at 23:59Z. This is a decoding fault with external provenance,
-    not a drifting clock, so it is dated rather than fitted.
+    The onboard software held eleven frames where five were assumed, so the data
+    handed out was six frames -- 900 ms at 150 ms a frame -- older than the time
+    written beside it. NOAA corrected it on 2001-08-07 at 23:59Z. This is a fault
+    in what the platform reported, attested outside this record, so it is dated
+    rather than fitted.
+
+    Measured on the six early NOAA-15 and NOAA-16 passes we hold: taking the lag
+    out moves the mean fitted time offset from 1.367 s to 0.745 s, while adding
+    it instead pushes them to 2.556 s.
     """
     before = np.datetime64("2001-06-01T00:00:00")
     after = np.datetime64("2001-09-01T00:00:00")
 
-    assert frame_buffer_delay_for("noaa15", before) == 0.9
-    assert frame_buffer_delay_for("noaa16", before) == 0.9
-    assert frame_buffer_delay_for("noaa15", after) == 0.0
-    assert frame_buffer_delay_for("noaa16", after) == 0.0
-    assert frame_buffer_delay_for("noaa17", before) == 0.0
-    assert frame_buffer_delay_for("noaa14", before) == 0.0
+    assert frame_buffer_lag_for("noaa15", before) == 0.9
+    assert frame_buffer_lag_for("noaa16", before) == 0.9
+    assert frame_buffer_lag_for("noaa15", after) == 0.0
+    assert frame_buffer_lag_for("noaa16", after) == 0.0
+    assert frame_buffer_lag_for("noaa17", before) == 0.0
+    assert frame_buffer_lag_for("noaa14", before) == 0.0
 
 
 def test_whether_to_fit_the_clock_is_settled_by_the_platform_alone():

@@ -199,12 +199,13 @@ class TestLACKLM:
         assert np.all(np.isnan(channels[:, :, 3]))
 
 
-def test_an_early_noaa15_pass_is_dated_later_than_the_same_pass_from_noaa17():
+def test_an_early_noaa15_pass_is_dated_earlier_than_the_same_pass_from_noaa17():
     """The buffered frames are taken out of the reported time, and only where they were.
 
-    NOAA-15 and NOAA-16 named a frame they had already taken, 900 ms early. The
-    same scanlines read as any other platform keep the time the file states, so
-    the difference between the two is the whole of the correction.
+    The scanlines NOAA-15 and NOAA-16 handed out were 900 ms older than the time
+    written beside them, so the correction moves them back. The same scanlines
+    read as any other platform keep the time the file states, so the difference
+    between the two is the whole of the correction.
     """
     def times_read_as(platform):
         reader = GACKLMReader()
@@ -222,7 +223,7 @@ def test_an_early_noaa15_pass_is_dated_later_than_the_same_pass_from_noaa17():
     untouched = times_read_as("noaa17")
 
     shift = (corrected - untouched) / np.timedelta64(1, "s")
-    numpy.testing.assert_allclose(shift, 0.9)
+    numpy.testing.assert_allclose(shift, -0.9)
 
 
 def test_the_times_as_the_file_stated_them_are_kept():
@@ -247,7 +248,7 @@ def test_the_times_as_the_file_stated_them_are_kept():
     stated = reader.times_as_the_file_stated_them
 
     moved = (corrected - stated) / np.timedelta64(1, "s")
-    numpy.testing.assert_allclose(moved, 0.9)
+    numpy.testing.assert_allclose(moved, -0.9)
 
 
 def test_gac_scanline_dtype():

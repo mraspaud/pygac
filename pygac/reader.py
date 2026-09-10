@@ -171,28 +171,34 @@ def has_a_trusted_clock(spacecraft_name):
     return spacecraft_name in PLATFORMS_WITH_A_TRUSTED_CLOCK
 
 
-#: How long NOAA-15 and NOAA-16 reported their scanlines early, in seconds, and the
-#: moment NOAA corrected it.
+#: How far behind their timestamps NOAA-15 and NOAA-16 handed out their scanlines,
+#: in seconds, and the moment NOAA corrected it.
 #:
-#: The onboard software buffered eleven frames where five were assumed. At 150 ms a
-#: frame that is 900 ms, and the timestamp named a frame the instrument had already
-#: taken. NOAA fixed it on 2001-08-07 at 23:59Z; their own operational adjustment was
-#: a round second, but the reported time was out by the 0.9 s the buffering explains.
+#: The onboard software buffered eleven frames where five were assumed, so the data
+#: given out was six frames behind the time written beside it -- 900 ms at 150 ms a
+#: frame. The scanline was therefore taken earlier than it claims, and the correction
+#: moves it back. NOAA fixed it on 2001-08-07 at 23:59Z; their own operational
+#: adjustment was a round second, while the buffering accounts for 0.9 s.
+#:
+#: The direction is measured, not assumed. Across the six early NOAA-15 and NOAA-16
+#: passes in the diagnostic set, moving the timestamps back by this lag brings the
+#: mean fitted time offset from 1.367 s to 0.745 s, while moving them forward instead
+#: pushes it to 2.556 s.
 #:
 #: This is a fault in what the platform reported, attested outside this record, so it
 #: is applied by date rather than fitted from imagery.
-EARLY_KLM_FRAME_BUFFER_DELAY_S = 0.9
+EARLY_KLM_FRAME_BUFFER_LAG_S = 0.9
 EARLY_KLM_FRAME_BUFFER_FIXED_AT = np.datetime64("2001-08-07T23:59:00")
 PLATFORMS_WITH_THE_EARLY_KLM_FRAME_BUFFER = ("noaa15", "noaa16")
 
 
-def frame_buffer_delay_for(spacecraft_name, when):
-    """Give the seconds *spacecraft_name* reported its scanlines early at *when*."""
+def frame_buffer_lag_for(spacecraft_name, when):
+    """Give the seconds *spacecraft_name* lagged its own timestamps at *when*."""
     if spacecraft_name not in PLATFORMS_WITH_THE_EARLY_KLM_FRAME_BUFFER:
         return 0.0
     if np.datetime64(when) >= EARLY_KLM_FRAME_BUFFER_FIXED_AT:
         return 0.0
-    return EARLY_KLM_FRAME_BUFFER_DELAY_S
+    return EARLY_KLM_FRAME_BUFFER_LAG_S
 
 
 #: The scan steps 0.05409868099 degrees between samples, so the outermost of the 2048
@@ -692,7 +698,7 @@ class Reader(ABC):
             except TimestampMismatch as err:
                 LOG.error(str(err))
             self._times_as_the_file_stated_them = self._times_as_np_datetime64.copy()
-            self._times_as_np_datetime64 += self._buffered_frames_the_file_did_not_count()
+            self._times_as_np_datetime64 -= self._buffered_frames_the_file_did_not_count()
         return self._times_as_np_datetime64
 
     @property
@@ -701,9 +707,9 @@ class Reader(ABC):
         return self._times_as_the_file_stated_them
 
     def _buffered_frames_the_file_did_not_count(self):
-        """Give the time this platform reported its scanlines early, as a duration."""
-        early = frame_buffer_delay_for(self.spacecraft_name, self._times_as_np_datetime64[0])
-        return np.timedelta64(int(early * 1e9), "ns")
+        """Give the time this platform lagged its own timestamps, as a duration."""
+        lag = frame_buffer_lag_for(self.spacecraft_name, self._times_as_np_datetime64[0])
+        return np.timedelta64(int(lag * 1e9), "ns")
 
 
     @staticmethod
