@@ -1073,6 +1073,7 @@ class Reader(ABC):
             try:
                 self._georeference_data(calibrated_ds)
                 calibrated_ds.attrs["georeferenced"] = True
+                calibrated_ds.attrs["navigation"]["georeferenced"] = True
             except Exception as err:  # noqa
                 LOG.exception("Could not georeference!")
                 warnings.warn(f"Could not georeference: {str(err)}", category=RuntimeWarning)

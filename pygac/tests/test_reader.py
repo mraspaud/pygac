@@ -1558,6 +1558,32 @@ def test_estimated_attitude_is_published_in_degrees(pod_file_with_tbm_header, po
     assert dataset.attrs["navigation_metadata_schema_version"] >= 3
 
 
+def test_the_navigation_record_says_what_the_fit_rested_on(pod_file_with_tbm_header, pod_tle,
+                                                            monkeypatch):
+    """Whether the navigation was corrected at all travels with what the fit settled.
+
+    An attitude means nothing without knowing whether it was applied. The two belong
+    to the same record, so that a reader cannot pick up one and miss the other.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif",
+                          adjust_clock_drift=False)
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["navigation"]["georeferenced"] is True
+
+
 def test_georeferencing_rejects_too_few_gcps(pod_file_with_tbm_header, pod_tle, monkeypatch):
     """A fit resting on a handful of control points must be rejected.
 
