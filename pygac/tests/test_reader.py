@@ -2218,6 +2218,34 @@ def test_a_scan_angle_is_read_from_the_named_configuration_file(tmp_path, monkey
         reset_config()
 
 
+def test_the_navigation_record_says_how_many_points_it_rested_on(pod_file_with_tbm_header,
+                                                                 pod_tle, monkeypatch):
+    """An attitude means nothing without the control points behind it.
+
+    The same angles read very differently resting on a dozen points and on six
+    hundred, so the count belongs with them rather than beside them. It is the fact
+    that went missing from delivered products: recorded on the dataset, dropped at
+    the next hop, and absent from every file the campaign wrote.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif",
+                          adjust_clock_drift=False)
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    assert dataset.attrs["navigation"]["gcp_count"] == 60
+
+
 def test_a_clock_named_in_the_configuration_is_believed_or_not(tmp_path):
     """A platform shown to hold its time is promoted without editing pygac.
 
