@@ -687,12 +687,23 @@ class Reader(ABC):
     def get_counts(self):
         """Get the counts.
 
+        The values are ten bits wide, which float32 holds exactly, so carrying them
+        narrow loses nothing here and halves both the channels and the copy kept for
+        the uncertainties.
+
+        Downstream it costs nothing today, but for two different reasons: the thermal
+        calibration widens what it is given (``counts.astype(float)``), while the solar
+        calibration does not, and stays wide only because it is subtracting float64
+        coefficients. Narrow those coefficients and the solar path would quietly lose
+        precision -- so if the calibration coefficients ever change width, this is one
+        of the places to look.
+
         Returns:
             np.array: The counts, with channel 3a and 3b split if necessary.
 
         """
         packed_data = self.scans["sensor_data"]
-        counts = np.zeros((len(self.scans), self.scan_width * 5))
+        counts = np.zeros((len(self.scans), self.scan_width * 5), dtype=np.float32)
         counts_nb = (self.scan_width * 5) // 3
         remainder = (self.scan_width * 5) % 3
         if remainder == 0:

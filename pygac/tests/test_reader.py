@@ -2246,6 +2246,21 @@ def test_the_navigation_record_says_how_many_points_it_rested_on(pod_file_with_t
     assert dataset.attrs["navigation"]["gcp_count"] == 60
 
 
+def test_the_counts_are_carried_at_the_width_they_need(pod_file_with_tbm_header, pod_tle):
+    """Ten-bit counts do not need sixty-four bits to hold them.
+
+    Everything downstream inherits the width the counts are read at: the calibrated
+    channels, the copy kept for the uncertainties, and every array derived from them.
+    A pass carries two of these cubes, so the choice is worth hundreds of megabytes
+    on a record of nine hundred thousand passes.
+    """
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=False, adjust_clock_drift=False)
+    reader.read(pod_file_with_tbm_header)
+
+    assert reader.get_counts().dtype == np.float32
+
+
 def test_a_clock_named_in_the_configuration_is_believed_or_not(tmp_path):
     """A platform shown to hold its time is promoted without editing pygac.
 
