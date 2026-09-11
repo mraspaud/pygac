@@ -1210,6 +1210,7 @@ class Reader(ABC):
             "attitude_in_degrees": tuple(np.rad2deg(attitude_in_radians)),
             "time_offset_in_seconds": time_offset_in_seconds,
             "gcp_count": calibrated_ds.attrs["gcp_count"],
+            "element_age_in_days": self.element_age_in_days,
             "schema_version": NAVIGATION_METADATA_SCHEMA_VERSION,
         }
 
@@ -1546,6 +1547,8 @@ class Reader(ABC):
             LOG.warning("Found TLE data for %s that is %f days apart", sdate, delta_days)
         else:
             LOG.debug("Found TLE data for %s that is %f days apart", sdate, delta_days)
+
+        self.element_age_in_days = float(delta_days)
 
         # Select TLE data
         tle1 = tle_data[iindex * 2]

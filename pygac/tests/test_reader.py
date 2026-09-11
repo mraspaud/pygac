@@ -2261,6 +2261,38 @@ def test_the_counts_are_carried_at_the_width_they_need(pod_file_with_tbm_header,
     assert reader.get_counts().dtype == np.float32
 
 
+def test_the_navigation_record_says_how_old_its_elements_were(pod_file_with_tbm_header,
+                                                               pod_tle, monkeypatch):
+    """How far the orbit was propagated belongs with what was navigated from it.
+
+    An element drifts about a kilometre a day, so a pass navigated from a week-old
+    element starts several kilometres out along its own track. The fit absorbs most of
+    that as a time offset, which is exactly why the age must travel with the product:
+    without it there is no way to tell a clock error from an orbit propagated too far,
+    and no way to weigh a fitted offset when it is read back as a clock measurement.
+    """
+    def skip_thermal(channels, *args, **kwargs):
+        return channels, []
+    import pygac.calibration.noaa
+    monkeypatch.setattr(pygac.calibration.noaa, "calibrate_thermal_channels", skip_thermal)
+
+    def mock_disp(calibrated_ds, *args, **rest):
+        record_a_coherent_field(calibrated_ds)
+        return 0, (0, 0, 0), ([10000] * 60, [1000] * 60)
+    use_a_stub_georeferencer(monkeypatch, mock_disp)
+
+    reader = LACPODReader(tle_dir=pod_tle.parent, tle_name=pod_tle.name,
+                          compute_lonlats_from_tles=True, reference_image="some_world_image.tif",
+                          adjust_clock_drift=False)
+    reader.read(pod_file_with_tbm_header)
+    dataset = reader.get_calibrated_dataset()
+
+    # the fixture's first scanline is 2000-11-17T03:18:44.8 and the nearer element's
+    # epoch is 01:07:52.4, which is where the age comes from -- not the start time the
+    # data set name states, which the reader does not use
+    assert dataset.attrs["navigation"]["element_age_in_days"] == pytest.approx(0.0909, abs=0.0005)
+
+
 def test_a_clock_named_in_the_configuration_is_believed_or_not(tmp_path):
     """A platform shown to hold its time is promoted without editing pygac.
 
